@@ -20,6 +20,7 @@
 #include "camera.hpp"
 #include "fps_meter.hpp"
 #include "objparser.hpp"
+#include "light.hpp"
 #include "sdlmanager.hpp"
 #include "shader.hpp"
 
@@ -73,7 +74,7 @@ int main(int argc, char** argv) {
 	glCullFace(GL_BACK);
 	glFrontFace(GL_CCW);
 
-#ifdef DLDEBUG
+#ifndef NDEBUG
 	if (glDebugMessageCallback) {
 		std::cout << "Register OpenGL debug callback " << '\n';
 		glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
@@ -149,44 +150,6 @@ int main(int argc, char** argv) {
 	glUniform1i(lightbound.getUniform("gPosition"), 0);
 	glUniform1i(lightbound.getUniform("gNormal"), 1);
 	glUniform1i(lightbound.getUniform("gAlbedoSpec"), 2);
-
-	Shader_Program drawlights;
-	drawlights.add("shaders/drawlight.v.glsl", Shader::VERTEX);
-	drawlights.add("shaders/drawlight.f.glsl", Shader::FRAGMENT);
-	drawlights.compile();
-	drawlights.link();
-
-	auto uDrawLightsView = drawlights.getUniform("view", Shader::MANDITORY);
-	auto uDrawLightsPerspective = drawlights.getUniform("perspective", Shader::MANDITORY);
-
-	Shader_Program forward_sun, forward_lights;
-	forward_sun.add("shaders/geometry.v.glsl", Shader::VERTEX);
-	forward_sun.add("shaders/forward-sun.f.glsl", Shader::FRAGMENT);
-	forward_sun.compile();
-	forward_sun.link();
-	forward_sun.use();
-
-	auto uForwardSunWorld = forward_sun.getUniform("world", Shader::MANDITORY);
-	auto uForwardSunView = forward_sun.getUniform("view", Shader::MANDITORY);
-	auto uForwardSunProjection = forward_sun.getUniform("projection", Shader::MANDITORY);
-
-	glUniformMatrix4fv(uForwardSunProjection, 1, GL_FALSE, glm::value_ptr(projection));
-
-	forward_lights.add("shaders/geometry.v.glsl", Shader::VERTEX);
-	forward_lights.add("shaders/forward-lights.f.glsl", Shader::FRAGMENT);
-	forward_lights.compile();
-	forward_lights.link();
-	forward_lights.use();
-
-	auto uForwardLightsWorld = forward_lights.getUniform("world", Shader::MANDITORY);
-	auto uForwardLightsView = forward_lights.getUniform("view", Shader::MANDITORY);
-	auto uForwardLightsProjection = forward_lights.getUniform("projection", Shader::MANDITORY);
-	auto uForwardLightsLightPosition =
-	    forward_lights.getUniform("lightposition", Shader::MANDITORY);
-	auto uForwardLightsLightColor = forward_lights.getUniform("lightcolor", Shader::MANDITORY);
-	auto uForwardLightsRadius = forward_lights.getUniform("radius", Shader::MANDITORY);
-
-	glUniformMatrix4fv(uForwardLightsProjection, 1, GL_FALSE, glm::value_ptr(projection));
 
 	Shader_Program ssaoPass1;
 	ssaoPass1.add("shaders/lighting.v.glsl", Shader::VERTEX);
@@ -268,159 +231,6 @@ int main(int argc, char** argv) {
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(1);
 	glEnableVertexAttribArray(2);
-
-	glBindVertexArray(0);
-
-	////////////
-	// Lights //
-	////////////
-
-	size_t lightcount = 0;
-
-	struct LightData {
-		float distance;
-		float orbit;
-		float height;
-		float size;
-	};
-
-	std::vector<LightData> lightdata;
-	std::vector<glm::vec3> lightposition;
-	std::vector<glm::mat4> lightworldmatrix;
-	std::vector<glm::mat4> lighteffectworldmatrix;
-	std::vector<glm::vec3> lightcolor;
-
-	lightdata.reserve(lightcount);
-	lightposition.reserve(lightcount);
-	lightworldmatrix.reserve(lightcount);
-	lighteffectworldmatrix.reserve(lightcount);
-	lightcolor.reserve(lightcount);
-
-	// Color
-	std::uniform_real_distribution<float> color_distribution(0, 1);
-	std::uniform_real_distribution<float> intensity_distribution(0.1, 5);
-	// Position
-	std::uniform_real_distribution<float> position_dist_distribution(1, 30);
-	std::uniform_real_distribution<float> position_orbit_distribution(0.0f, glm::two_pi<float>());
-	// std::uniform_real_distribution<float> position_height_distribution(-2.5,
-	// 2.5);
-	std::uniform_real_distribution<float> position_height_distribution(-2.5, -2.5);
-
-	auto create_single_light = [&] {
-		// Color
-		lightcolor.emplace_back(
-		    glm::normalize(glm::vec3(color_distribution(prng), color_distribution(prng),
-		                             color_distribution(prng))) *
-		    intensity_distribution(prng));
-
-		// Position
-		auto&& colorit = lightcolor.end() - 1;
-		LightData ret;
-		ret.distance = position_dist_distribution(prng);
-		ret.orbit = position_orbit_distribution(prng);
-		ret.height = position_height_distribution(prng);
-		constexpr float constant = 1.0;
-		constexpr float linear = 0.7;
-		constexpr float quadratic = 1.8;
-		float lightMax = std::max(std::max(colorit->r, colorit->g), colorit->b);
-		ret.size = (-linear + std::sqrt(linear * linear -
-		                                4 * quadratic * (constant - (256.0 / 5.0) * lightMax))) /
-		           (2 * quadratic);
-		lightdata.push_back(std::move(ret));
-
-		lightposition.emplace_back();
-		lightworldmatrix.emplace_back();
-		lighteffectworldmatrix.emplace_back();
-
-		lightcount += 1;
-	};
-
-	auto create_light = [&](size_t count = 10) {
-		for (size_t i = 0; i < count; ++i) {
-			create_single_light();
-		}
-
-		std::cerr << count << " lights added. " << lightcount << " total.\n";
-	};
-
-	auto remove_single_light = [&] {
-		if (lightcount) {
-			lightdata.pop_back();
-			lightposition.pop_back();
-			lightworldmatrix.pop_back();
-			lighteffectworldmatrix.pop_back();
-			lightcolor.pop_back();
-			lightcount -= 1;
-		}
-		else {
-			std::cerr << "Dammit you, there are no more lights left!\n";
-		}
-	};
-
-	auto remove_light = [&](size_t count = 10) {
-		for (size_t i = 0; i < count; ++i) {
-			remove_single_light();
-		}
-
-		std::cerr << count << " lights removed. " << lightcount << " total.\n";
-	};
-
-	create_light(20);
-
-	auto circlefile = parse_obj_file("objects/circle.obj");
-	auto squarefile = parse_obj_file("objects/square.obj");
-
-	GLuint Light_VAO, Light_VBO;
-	GLuint LightCircle_VBO;
-	GLuint LightTransform_VBO;
-	GLuint LightColor_VBO;
-	GLuint LightPosition_VBO;
-	glGenVertexArrays(1, &Light_VAO);
-	glBindVertexArray(Light_VAO);
-
-	glGenBuffers(1, &Light_VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, Light_VBO);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), NULL);
-	glBufferData(GL_ARRAY_BUFFER, squarefile.objects[0].vertices.size() * sizeof(Vertex),
-	             squarefile.objects[0].vertices.data(), GL_STATIC_DRAW);
-	glEnableVertexAttribArray(0);
-
-	glGenBuffers(1, &LightTransform_VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, LightTransform_VBO);
-	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4),
-	                      (void*) (0 * sizeof(GLfloat)));
-	glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4),
-	                      (void*) (4 * sizeof(GLfloat)));
-	glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4),
-	                      (void*) (8 * sizeof(GLfloat)));
-	glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4),
-	                      (void*) (12 * sizeof(GLfloat)));
-	glEnableVertexAttribArray(2);
-	glEnableVertexAttribArray(3);
-	glEnableVertexAttribArray(4);
-	glEnableVertexAttribArray(5);
-	glVertexAttribDivisor(2, 1);
-	glVertexAttribDivisor(3, 1);
-	glVertexAttribDivisor(4, 1);
-	glVertexAttribDivisor(5, 1);
-
-	glGenBuffers(1, &LightColor_VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, LightColor_VBO);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), NULL);
-	glEnableVertexAttribArray(1);
-	glVertexAttribDivisor(1, 1);
-
-	glGenBuffers(1, &LightPosition_VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, LightPosition_VBO);
-	glVertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), NULL);
-	glEnableVertexAttribArray(6);
-	glVertexAttribDivisor(6, 1);
-
-	glGenBuffers(1, &LightCircle_VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, LightCircle_VBO);
-	glBufferData(GL_ARRAY_BUFFER, circlefile.objects[0].vertices.size() * sizeof(Vertex),
-	             circlefile.objects[0].vertices.data(), GL_STATIC_DRAW);
-	glVertexAttribPointer(7, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), NULL);
 
 	glBindVertexArray(0);
 
@@ -514,7 +324,7 @@ int main(int argc, char** argv) {
 			cam.rotate(mouseDY, mouseDX, 50);
 		}
 
-		fps.frame(lightcount);
+		fps.frame(0);
 
 		const float cameraSpeed = 5.0f * fps.get_delta_time();
 
@@ -548,19 +358,19 @@ int main(int argc, char** argv) {
 							}
 							break;
 						case SDLK_0:
-							remove_light(lightcount);
+							//remove_light(lightcount);
 							break;
 						case SDLK_RIGHTBRACKET:
-							create_light(10);
+							//create_light(10);
 							break;
 						case SDLK_LEFTBRACKET:
-							remove_light(10);
+							//remove_light(10);
 							break;
 						case SDLK_EQUALS:
-							create_light(1);
+							//create_light(1);
 							break;
 						case SDLK_MINUS:
-							remove_light(1);
+							//remove_light(1);
 							break;
 						case SDLK_LALT:
 						case SDLK_RALT:
@@ -630,347 +440,235 @@ int main(int argc, char** argv) {
 		}
 		if (keys[SDLK_LCTRL]) {
 			cam.move(glm::vec3(0, -cameraSpeed, 0));
-		}
+		}		
 
-		// Update Light Transforms
-		for (size_t i = 0; i < lightcount; ++i) {
-			auto&& lp = lightdata[i];
-			lp.orbit += glm::radians(15.0f * fps.get_delta_time());
+		///////////////////
+		// Geometry Pass //
+		///////////////////
 
-			glm::mat4 height = glm::translate(glm::mat4(), glm::vec3(0, lp.height, 0));
-			glm::mat4 orbit = glm::rotate(glm::mat4(), lp.orbit, glm::vec3(0, 1, 0));
-			glm::mat4 trans = glm::translate(glm::mat4(), glm::vec3(0, 0, -lp.distance));
-			glm::mat4 scale = glm::scale(glm::mat4(), glm::vec3(lp.size * 0.04));
-			glm::mat4 effectscale = glm::scale(glm::mat4(), glm::vec3(lp.size));
+		// Use geometry pass shaders
+		geometrypass.use();
 
-			glm::mat4 unscaled = orbit * height * trans;
-			lightposition[i] = glm::vec3(cam.get_matrix() * unscaled * glm::vec4(0, 0, 0, 1));
-			lightworldmatrix[i] = unscaled * scale;
-			lighteffectworldmatrix[i] = unscaled * effectscale;
-		}
+		// Update matrix uniforms
+		glUniformMatrix4fv(uGeoWorld, 1, GL_FALSE, glm::value_ptr(monkey_world));
+		glUniformMatrix4fv(uGeoView, 1, GL_FALSE, glm::value_ptr(cam.get_matrix()));
+		glUniformMatrix4fv(uGeoProjection, 1, GL_FALSE, glm::value_ptr(projection));
 
-		glBindVertexArray(Light_VAO);
-		glBindBuffer(GL_ARRAY_BUFFER, LightTransform_VBO);
-		glBufferData(GL_ARRAY_BUFFER, lightcount * sizeof(glm::mat4), lighteffectworldmatrix.data(),
-		             GL_STREAM_DRAW);
+		// Bind gBuffer in order to write to it
+		glBindFramebuffer(GL_FRAMEBUFFER, reninfo.gBuffer);
 
-		glBindBuffer(GL_ARRAY_BUFFER, LightPosition_VBO);
-		glBufferData(GL_ARRAY_BUFFER, lightcount * sizeof(glm::vec3), lightposition.data(),
-		             GL_STREAM_DRAW);
+		// Clear the gBuffer
+		glClearColor(0, 0, 0, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		glBindBuffer(GL_ARRAY_BUFFER, LightColor_VBO);
-		glBufferData(GL_ARRAY_BUFFER, lightcount * sizeof(glm::vec3), lightcolor.data(),
-		             GL_STREAM_DRAW);
+		// Use normal depth function
+		glDepthFunc(GL_LESS);
 
-		if (!forward) {
-			///////////////////
-			// Geometry Pass //
-			///////////////////
+		// Bind monkey vertex data
+		glBindVertexArray(Monkey_VAO);
+		glBindBuffer(GL_ARRAY_BUFFER, Monkey_VBO);
 
-			// Use geometry pass shaders
-			geometrypass.use();
+		// Draw elements on the gBuffer
+		glDrawArrays(GL_TRIANGLES, 0, file.objects[0].vertices.size());
 
-			// Update matrix uniforms
-			glUniformMatrix4fv(uGeoWorld, 1, GL_FALSE, glm::value_ptr(monkey_world));
-			glUniformMatrix4fv(uGeoView, 1, GL_FALSE, glm::value_ptr(cam.get_matrix()));
-			glUniformMatrix4fv(uGeoProjection, 1, GL_FALSE, glm::value_ptr(projection));
+		// Bind world vertex data
+		glBindVertexArray(World_VAO);
+		glBindBuffer(GL_ARRAY_BUFFER, World_VBO);
 
-			// Bind gBuffer in order to write to it
-			glBindFramebuffer(GL_FRAMEBUFFER, reninfo.gBuffer);
+		glUniformMatrix4fv(uGeoWorld, 1, GL_FALSE, glm::value_ptr(world_world));
 
-			// Clear the gBuffer
-			glClearColor(0, 0, 0, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glDrawArrays(GL_TRIANGLES, 0, worldfile.objects[0].vertices.size());
 
-			// Use normal depth function
-			glDepthFunc(GL_LESS);
+		// Unbind arrays
+		glBindVertexArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-			// Bind monkey vertex data
-			glBindVertexArray(Monkey_VAO);
-			glBindBuffer(GL_ARRAY_BUFFER, Monkey_VBO);
+		// Unbind framebuffer
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-			// Draw elements on the gBuffer
-			glDrawArrays(GL_TRIANGLES, 0, file.objects[0].vertices.size());
+		////////////////
+		// Depth Blit //
+		////////////////
 
-			// Bind world vertex data
-			glBindVertexArray(World_VAO);
-			glBindBuffer(GL_ARRAY_BUFFER, World_VBO);
+		// Blit depth pass to light buffer
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, reninfo.gBuffer);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, reninfo.lBuffer);
 
-			glUniformMatrix4fv(uGeoWorld, 1, GL_FALSE, glm::value_ptr(world_world));
+		glBlitFramebuffer(0, 0, sdlm.size.width, sdlm.size.height, 0, 0, sdlm.size.width,
+			                sdlm.size.height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 
-			glDrawArrays(GL_TRIANGLES, 0, worldfile.objects[0].vertices.size());
-
-			// Unbind arrays
-			glBindVertexArray(0);
-			glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-			// Unbind framebuffer
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-			////////////////
-			// Depth Blit //
-			////////////////
-
-			// Blit depth pass to light buffer
-			glBindFramebuffer(GL_READ_FRAMEBUFFER, reninfo.gBuffer);
-			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, reninfo.lBuffer);
+		if (SSAO) {
+			// Blit depth pass to ssao buffer
+			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, reninfo.ssaoBuffer);
 
 			glBlitFramebuffer(0, 0, sdlm.size.width, sdlm.size.height, 0, 0, sdlm.size.width,
-			                  sdlm.size.height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+				                sdlm.size.height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+		}
+		glBindFramebuffer(GL_FRAMEBUFFER, reninfo.lBuffer);
 
-			if (SSAO) {
-				// Blit depth pass to ssao buffer
-				glBindFramebuffer(GL_DRAW_FRAMEBUFFER, reninfo.ssaoBuffer);
+		// Bind the buffers
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, reninfo.gPosition);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, reninfo.gNormal);
+		glActiveTexture(GL_TEXTURE2);
+		glBindTexture(GL_TEXTURE_2D, reninfo.gAlbedoSpec);
+		glActiveTexture(GL_TEXTURE3);
+		glBindTexture(GL_TEXTURE_2D, reninfo.ssaoNoiseTexture);
+		glActiveTexture(GL_TEXTURE4);
+		glBindTexture(GL_TEXTURE_2D, reninfo.ssaoColor);
+		glActiveTexture(GL_TEXTURE5);
+		glBindTexture(GL_TEXTURE_2D, reninfo.ssaoBlurColor);
+		glActiveTexture(GL_TEXTURE6);
+		glBindTexture(GL_TEXTURE_2D, reninfo.gDepth);
 
-				glBlitFramebuffer(0, 0, sdlm.size.width, sdlm.size.height, 0, 0, sdlm.size.width,
-				                  sdlm.size.height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-			}
-			glBindFramebuffer(GL_FRAMEBUFFER, reninfo.lBuffer);
+		///////////////
+		// SSAO Pass //
+		///////////////
 
-			// Bind the buffers
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, reninfo.gPosition);
-			glActiveTexture(GL_TEXTURE1);
-			glBindTexture(GL_TEXTURE_2D, reninfo.gNormal);
-			glActiveTexture(GL_TEXTURE2);
-			glBindTexture(GL_TEXTURE_2D, reninfo.gAlbedoSpec);
-			glActiveTexture(GL_TEXTURE3);
-			glBindTexture(GL_TEXTURE_2D, reninfo.ssaoNoiseTexture);
-			glActiveTexture(GL_TEXTURE4);
-			glBindTexture(GL_TEXTURE_2D, reninfo.ssaoColor);
-			glActiveTexture(GL_TEXTURE5);
-			glBindTexture(GL_TEXTURE_2D, reninfo.ssaoBlurColor);
-			glActiveTexture(GL_TEXTURE6);
-			glBindTexture(GL_TEXTURE_2D, reninfo.gDepth);
+		if (SSAO) {
+			glBindFramebuffer(GL_FRAMEBUFFER, reninfo.ssaoBuffer);
 
-			///////////////
-			// SSAO Pass //
-			///////////////
-
-			if (SSAO) {
-				glBindFramebuffer(GL_FRAMEBUFFER, reninfo.ssaoBuffer);
-
-				glClearColor(1.0, 1.0, 1.0, 1.0);
-				glClear(GL_COLOR_BUFFER_BIT);
-
-				ssaoPass1.use();
-
-				glDepthFunc(GL_GREATER);
-				glDepthMask(GL_FALSE);
-
-				glUniformMatrix4fv(uSSAOPass1Projection, 1, GL_FALSE, glm::value_ptr(projection));
-
-				RenderFullscreenQuad();
-
-				ssaoPass2.use();
-
-				glBindFramebuffer(GL_FRAMEBUFFER, reninfo.ssaoBlurBuffer);
-				glClear(GL_COLOR_BUFFER_BIT);
-
-				RenderFullscreenQuad();
-			}
-			else {
-				glBindFramebuffer(GL_FRAMEBUFFER, reninfo.ssaoBlurBuffer);
-
-				glClearColor(1.0, 1.0, 1.0, 1.0);
-				glClear(GL_COLOR_BUFFER_BIT);
-			}
-
-			glBindFramebuffer(GL_FRAMEBUFFER, reninfo.lBuffer);
-
-			///////////////////
-			// Lighting Pass //
-			///////////////////
-
-			// Clear color
-			glClearColor(0.118, 0.428, 0.860, 1);
+			glClearColor(1.0, 1.0, 1.0, 1.0);
 			glClear(GL_COLOR_BUFFER_BIT);
 
-			lightingpass.use();
+			ssaoPass1.use();
 
-			// Fire the fragment shader if there is an object in front of the square
-			// The square is drawn at the very back
 			glDepthFunc(GL_GREATER);
 			glDepthMask(GL_FALSE);
 
-			// Upload current view position
-			glUniform3fv(uLightViewPos, 1, glm::value_ptr(cam.get_location()));
+			glUniformMatrix4fv(uSSAOPass1Projection, 1, GL_FALSE, glm::value_ptr(projection));
 
-			// Render a quad
 			RenderFullscreenQuad();
 
-			glDepthMask(GL_TRUE);
+			ssaoPass2.use();
 
-			//////////////////////////////////
-			// Calculate Per Light Lighting //
-			//////////////////////////////////
+			glBindFramebuffer(GL_FRAMEBUFFER, reninfo.ssaoBlurBuffer);
+			glClear(GL_COLOR_BUFFER_BIT);
 
-			if (dynamic_lighting) {
-				lightbound.use();
-
-				glBindVertexArray(Light_VAO);
-
-				glUniformMatrix4fv(uLightBoundPerspective, 1, GL_FALSE, glm::value_ptr(projection));
-				glUniformMatrix4fv(uLightBoundView, 1, GL_FALSE, glm::value_ptr(cam.get_matrix()));
-				glUniform3fv(uLightBoundViewPos, 1, glm::value_ptr(cam.get_location()));
-				glUniform2f(uLightBoundResolution, sdlm.size.width, sdlm.size.height);
-
-				glDepthFunc(GL_LESS);
-				glDepthMask(GL_FALSE);
-
-				glEnable(GL_BLEND);
-				glBlendFunc(GL_ONE, GL_ONE);
-
-				glEnable(GL_STENCIL_TEST);
-
-				glDisableVertexAttribArray(0);
-				glEnableVertexAttribArray(7);
-
-				for (size_t i = 0; i < lightcount; ++i) {
-					glClear(GL_STENCIL_BUFFER_BIT);
-
-					glUniformMatrix4fv(uLightBoundWorld, 1, GL_FALSE,
-					                   glm::value_ptr(lighteffectworldmatrix[i]));
-					glUniform3fv(uLightBoundLightColor, 1, glm::value_ptr(lightcolor[i]));
-					glUniform3fv(uLightBoundLightPosition, 1, glm::value_ptr(lightposition[i]));
-					glUniform1f(uLightBoundRadius, lightdata[i].size);
-
-					// Front (near) faces only
-					// Colour write is disabled
-					// Z-write is disabled
-					// Z function is 'Less/Equal'
-					// Z-Fail writes non-zero value to Stencil buffer (for example,
-					// 'Increment-Saturate')
-					// Stencil test result does not modify Stencil buffer
-
-					glCullFace(GL_BACK);
-					glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-					glDepthMask(GL_FALSE);
-					glDepthFunc(GL_LEQUAL);
-					glStencilMask(GL_TRUE);
-					glStencilOp(GL_KEEP, GL_INCR, GL_KEEP);
-					glStencilFunc(GL_ALWAYS, 0, 0xFF);
-
-					glDrawArrays(GL_TRIANGLES, 0, circlefile.objects[0].vertices.size());
-
-					// Back (far) faces only
-					// Colour write enabled
-					// Z-write is disabled
-					// Z function is 'Greater/Equal'
-					// Stencil function is 'Equal' (Stencil ref = zero)
-					// Always clears Stencil to zero
-
-					glCullFace(GL_FRONT);
-					glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-					// Z-write already disabled
-					glDepthFunc(GL_GEQUAL);
-					glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-					glStencilFunc(GL_EQUAL, 0, 0x00);
-
-					glDrawArrays(GL_TRIANGLES, 0, circlefile.objects[0].vertices.size());
-				}
-
-				glDisableVertexAttribArray(7);
-				glEnableVertexAttribArray(0);
-
-				glCullFace(GL_BACK);
-				glDepthMask(GL_TRUE);
-				glDepthFunc(GL_LEQUAL);
-				glStencilFunc(GL_ALWAYS, 0, 0xFF);
-				glDisable(GL_STENCIL_TEST);
-				glDisable(GL_BLEND);
-			}
-
-			// Blit depth pass to current depth
-			glBindFramebuffer(GL_READ_FRAMEBUFFER, reninfo.gBuffer);
-			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, reninfo.lBuffer);
-
-			glBlitFramebuffer(0, 0, sdlm.size.width, sdlm.size.height, 0, 0, sdlm.size.width,
-			                  sdlm.size.height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-			glBindFramebuffer(GL_FRAMEBUFFER, reninfo.lBuffer);
-
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			RenderFullscreenQuad();
 		}
 		else {
-			glBindFramebuffer(GL_FRAMEBUFFER, reninfo.lBuffer);
+			glBindFramebuffer(GL_FRAMEBUFFER, reninfo.ssaoBlurBuffer);
 
-			glClearColor(0.118, 0.428, 0.860, 1);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-			forward_sun.use();
-
-			auto render_scene = [&](GLuint world, GLuint view, GLuint proj) {
-				glUniformMatrix4fv(world, 1, GL_FALSE, glm::value_ptr(monkey_world));
-				glUniformMatrix4fv(view, 1, GL_FALSE, glm::value_ptr(cam.get_matrix()));
-				glUniformMatrix4fv(proj, 1, GL_FALSE, glm::value_ptr(projection));
-
-				glBindVertexArray(Monkey_VAO);
-
-				glDrawArrays(GL_TRIANGLES, 0, file.objects[0].vertices.size());
-
-				glUniformMatrix4fv(world, 1, GL_FALSE, glm::value_ptr(world_world));
-
-				glBindVertexArray(World_VAO);
-
-				glDrawArrays(GL_TRIANGLES, 0, worldfile.objects[0].vertices.size());
-
-				glBindVertexArray(0);
-			};
-
-			////////////////////
-			// Depth Pre-Pass //
-			////////////////////
-
-			glDepthFunc(GL_LESS);
-			glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-
-			render_scene(uForwardSunWorld, uForwardSunView, uForwardSunProjection);
-
-			glDepthFunc(GL_LEQUAL);
-			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-
-			render_scene(uForwardSunWorld, uForwardSunView, uForwardSunProjection);
-
-			if (dynamic_lighting) {
-				forward_lights.use();
-				glDepthMask(GL_FALSE);
-				glEnable(GL_BLEND);
-				glBlendFunc(GL_ONE, GL_ONE);
-
-				for (size_t i = 0; i < lightcount; ++i) {
-					glUniform3fv(uForwardLightsLightPosition, 1, glm::value_ptr(lightposition[i]));
-					glUniform3fv(uForwardLightsLightColor, 1, glm::value_ptr(lightcolor[i]));
-					glUniform1f(uForwardLightsRadius, lightdata[i].size);
-
-					render_scene(uForwardLightsWorld, uForwardLightsView, uForwardLightsProjection);
-				}
-
-				glDisable(GL_BLEND);
-				glBlendFunc(GL_ONE, GL_ZERO);
-				glDepthMask(GL_TRUE);
-			}
+			glClearColor(1.0, 1.0, 1.0, 1.0);
+			glClear(GL_COLOR_BUFFER_BIT);
 		}
-
-		////////////////
-		// Light Pass //
-		////////////////
 
 		glBindFramebuffer(GL_FRAMEBUFFER, reninfo.lBuffer);
 
-		drawlights.use();
+		///////////////////
+		// Lighting Pass //
+		///////////////////
 
-		glDepthFunc(GL_LESS);
+		// Clear color
+		glClearColor(0.118, 0.428, 0.860, 1);
+		glClear(GL_COLOR_BUFFER_BIT);
 
-		glBindVertexArray(Light_VAO);
-		glBindBuffer(GL_ARRAY_BUFFER, LightTransform_VBO);
-		glBufferData(GL_ARRAY_BUFFER, lightcount * sizeof(glm::mat4), lightworldmatrix.data(),
-		             GL_STREAM_DRAW);
+		lightingpass.use();
 
-		glUniformMatrix4fv(uDrawLightsView, 1, GL_FALSE, glm::value_ptr(cam.get_matrix()));
-		glUniformMatrix4fv(uDrawLightsPerspective, 1, GL_FALSE, glm::value_ptr(projection));
+		// Fire the fragment shader if there is an object in front of the square
+		// The square is drawn at the very back
+		glDepthFunc(GL_GREATER);
+		glDepthMask(GL_FALSE);
 
-		glDrawArraysInstanced(GL_TRIANGLES, 0, squarefile.objects[0].vertices.size(), lightcount);
+		// Upload current view position
+		glUniform3fv(uLightViewPos, 1, glm::value_ptr(cam.get_location()));
 
-		glBindVertexArray(0);
+		// Render a quad
+		RenderFullscreenQuad();
+
+		glDepthMask(GL_TRUE);
+
+		//////////////////////////////////
+		// Calculate Per Light Lighting //
+		//////////////////////////////////
+
+		if (dynamic_lighting) {
+			lightbound.use();
+
+			glBindVertexArray(lights::Light_VAO);
+
+			glUniformMatrix4fv(uLightBoundPerspective, 1, GL_FALSE, glm::value_ptr(projection));
+			glUniformMatrix4fv(uLightBoundView, 1, GL_FALSE, glm::value_ptr(cam.get_matrix()));
+			glUniform3fv(uLightBoundViewPos, 1, glm::value_ptr(cam.get_location()));
+			glUniform2f(uLightBoundResolution, sdlm.size.width, sdlm.size.height);
+
+			glDepthFunc(GL_LESS);
+			glDepthMask(GL_FALSE);
+
+			glEnable(GL_BLEND);
+			glBlendFunc(GL_ONE, GL_ONE);
+
+			glEnable(GL_STENCIL_TEST);
+
+			glDisableVertexAttribArray(0);
+			glEnableVertexAttribArray(7);
+
+			for (size_t i = 0; i < lights::lightcount; ++i) {
+				glClear(GL_STENCIL_BUFFER_BIT);
+
+				glUniformMatrix4fv(uLightBoundWorld, 1, GL_FALSE,
+					                glm::value_ptr(lights::lighteffectworldmatrix[i]));
+				glUniform3fv(uLightBoundLightColor, 1, glm::value_ptr(lights::lightcolor[i]));
+				glUniform3fv(uLightBoundLightPosition, 1, glm::value_ptr(lights::lightdata[i].position));
+				glUniform1f(uLightBoundRadius, lights::lightdata[i].size);
+
+				// Front (near) faces only
+				// Colour write is disabled
+				// Z-write is disabled
+				// Z function is 'Less/Equal'
+				// Z-Fail writes non-zero value to Stencil buffer (for example,
+				// 'Increment-Saturate')
+				// Stencil test result does not modify Stencil buffer
+
+				glCullFace(GL_BACK);
+				glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+				glDepthMask(GL_FALSE);
+				glDepthFunc(GL_LEQUAL);
+				glStencilMask(GL_TRUE);
+				glStencilOp(GL_KEEP, GL_INCR, GL_KEEP);
+				glStencilFunc(GL_ALWAYS, 0, 0xFF);
+
+				glDrawArrays(GL_TRIANGLES, 0, lights::circlefile.objects[0].vertices.size());
+
+				// Back (far) faces only
+				// Colour write enabled
+				// Z-write is disabled
+				// Z function is 'Greater/Equal'
+				// Stencil function is 'Equal' (Stencil ref = zero)
+				// Always clears Stencil to zero
+
+				glCullFace(GL_FRONT);
+				glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+				// Z-write already disabled
+				glDepthFunc(GL_GEQUAL);
+				glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+				glStencilFunc(GL_EQUAL, 0, 0x00);
+
+				glDrawArrays(GL_TRIANGLES, 0, lights::circlefile.objects[0].vertices.size());
+			}
+
+			glDisableVertexAttribArray(7);
+			glEnableVertexAttribArray(0);
+
+			glCullFace(GL_BACK);
+			glDepthMask(GL_TRUE);
+			glDepthFunc(GL_LEQUAL);
+			glStencilFunc(GL_ALWAYS, 0, 0xFF);
+			glDisable(GL_STENCIL_TEST);
+			glDisable(GL_BLEND);
+		}
+
+		// Blit depth pass to current depth
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, reninfo.gBuffer);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, reninfo.lBuffer);
+
+		glBlitFramebuffer(0, 0, sdlm.size.width, sdlm.size.height, 0, 0, sdlm.size.width,
+			                sdlm.size.height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+		glBindFramebuffer(GL_FRAMEBUFFER, reninfo.lBuffer);
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 		////////////////////////////
 		// HDR/Gamma Post Process //
