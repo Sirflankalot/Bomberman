@@ -1,0 +1,9 @@
+.kdev*/
+*.kdev*
+.vs/
+build*/
+CMakeSettings.json
+x64/
+x86/
+Debug/
+Release/
