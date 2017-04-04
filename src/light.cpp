@@ -7,8 +7,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
-#include <unordered_map>
 #include <stdexcept>
+#include <unordered_map>
 #include <vector>
 
 namespace lights {
@@ -31,21 +31,22 @@ namespace lights {
 		constexpr float quadratic = 1.8;
 		float lightMax = std::max(std::max(color.r, color.g), color.b);
 		float size = (-linear + std::sqrt(linear * linear -
-			4 * quadratic * (constant - (256.0 / 5.0) * lightMax))) /
-			(2 * quadratic);
+		                                  4 * quadratic * (constant - (256.0 / 5.0) * lightMax))) /
+		             (2 * quadratic);
 
 		size_t lightptr = lightptrcount++;
-		lightdata.emplace_back(LightData{ position, lightptrcount, size });
+		lightdata.emplace_back(LightData{position, lightptrcount, size});
 		lightcolor.emplace_back(color);
 		lighteffectworldmatrix.resize(lighteffectworldmatrix.size() + 1);
 
+		lightcount++;
 		return lightptr;
 	}
 
 	// TODO: Reimpliment removal
 	void remove(std::size_t num) {
 		num = translation[num];
-#ifndef NDEBUG 
+#ifndef NDEBUG
 		if (num >= lightcount) {
 			throw std::invalid_argument("removing light above light count");
 		}
@@ -59,7 +60,7 @@ namespace lights {
 
 		lightcount--;
 	}
-	
+
 	ObjFile circlefile = parse_obj_file("objects/circle.obj");
 
 	void initialize() {
@@ -69,13 +70,13 @@ namespace lights {
 		glGenBuffers(1, &LightTransform_VBO);
 		glBindBuffer(GL_ARRAY_BUFFER, LightTransform_VBO);
 		glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4),
-			(void*)(0 * sizeof(GLfloat)));
+		                      (void*) (0 * sizeof(GLfloat)));
 		glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4),
-			(void*)(4 * sizeof(GLfloat)));
+		                      (void*) (4 * sizeof(GLfloat)));
 		glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4),
-			(void*)(8 * sizeof(GLfloat)));
+		                      (void*) (8 * sizeof(GLfloat)));
 		glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4),
-			(void*)(12 * sizeof(GLfloat)));
+		                      (void*) (12 * sizeof(GLfloat)));
 		glEnableVertexAttribArray(2);
 		glEnableVertexAttribArray(3);
 		glEnableVertexAttribArray(4);
@@ -100,7 +101,7 @@ namespace lights {
 		glGenBuffers(1, &LightCircle_VBO);
 		glBindBuffer(GL_ARRAY_BUFFER, LightCircle_VBO);
 		glBufferData(GL_ARRAY_BUFFER, circlefile.objects[0].vertices.size() * sizeof(Vertex),
-			circlefile.objects[0].vertices.data(), GL_STATIC_DRAW);
+		             circlefile.objects[0].vertices.data(), GL_STATIC_DRAW);
 		glVertexAttribPointer(7, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), NULL);
 
 		glBindVertexArray(0);
@@ -111,7 +112,7 @@ namespace lights {
 		for (size_t i = 0; i < lightcount; ++i) {
 			auto&& lp = lightdata[i];
 
-			glm::mat4 scale = glm::translate(glm::mat4{}, glm::vec3{ lp.size });
+			glm::mat4 scale = glm::scale(glm::mat4{}, glm::vec3{lp.size});
 			glm::mat4 translate = glm::translate(scale, lp.position);
 
 			lighteffectworldmatrix[i] = translate;
@@ -120,14 +121,14 @@ namespace lights {
 		glBindVertexArray(Light_VAO);
 		glBindBuffer(GL_ARRAY_BUFFER, LightTransform_VBO);
 		glBufferData(GL_ARRAY_BUFFER, lightcount * sizeof(glm::mat4), lighteffectworldmatrix.data(),
-			GL_STREAM_DRAW);
+		             GL_STREAM_DRAW);
 
 		glBindBuffer(GL_ARRAY_BUFFER, LightPosition_VBO);
-		glBufferData(GL_ARRAY_BUFFER, lightcount * sizeof(glm::vec3), lightdata.data(),
-			GL_STREAM_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, lightcount * sizeof(LightData), lightdata.data(),
+		             GL_STREAM_DRAW);
 
 		glBindBuffer(GL_ARRAY_BUFFER, LightColor_VBO);
 		glBufferData(GL_ARRAY_BUFFER, lightcount * sizeof(glm::vec3), lightcolor.data(),
-			GL_STREAM_DRAW);
+		             GL_STREAM_DRAW);
 	}
 }

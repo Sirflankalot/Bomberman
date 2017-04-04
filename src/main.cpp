@@ -19,8 +19,10 @@
 
 #include "camera.hpp"
 #include "fps_meter.hpp"
-#include "objparser.hpp"
+#include "gamegrid.hpp"
 #include "light.hpp"
+#include "objparser.hpp"
+#include "render.hpp"
 #include "sdlmanager.hpp"
 #include "shader.hpp"
 
@@ -109,7 +111,7 @@ int main(int argc, char** argv) {
 	auto uGeoProjection = geometrypass.getUniform("projection", Shader::MANDITORY);
 
 	auto world_world =
-	    glm::scale(glm::translate(glm::mat4(), glm::vec3(0, 5, 0)), glm::vec3(10, 10, 10));
+	    glm::scale(glm::translate(glm::mat4(), glm::vec3(0, 0, 0)), glm::vec3(1, 1, 1));
 	auto monkey_world = glm::translate(glm::mat4(), glm::vec3(0, 0, 0));
 	auto projection = glm::perspective(glm::radians(60.0f), sdlm.size.ratio, 0.5f, 1000.0f);
 
@@ -192,47 +194,24 @@ int main(int argc, char** argv) {
 	///////////////////////
 
 	GLuint Monkey_VAO, Monkey_VBO;
-	glGenVertexArrays(1, &Monkey_VAO);
-	glBindVertexArray(Monkey_VAO);
-
-	glGenBuffers(1, &Monkey_VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, Monkey_VBO);
-	glBufferData(GL_ARRAY_BUFFER, file.objects[0].vertices.size() * sizeof(Vertex),
-	             file.objects[0].vertices.data(), GL_STATIC_DRAW);
-
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat),
-	                      (GLvoid*) (0 * sizeof(GLfloat))); // Position
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat),
-	                      (GLvoid*) (3 * sizeof(GLfloat))); // Texcoords
-	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat),
-	                      (GLvoid*) (5 * sizeof(GLfloat))); // Normals
-
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
-	glEnableVertexAttribArray(2);
+	std::tie(Monkey_VAO, Monkey_VBO) = render::upload_model(file);
 
 	// World
 	GLuint World_VAO, World_VBO;
-	glGenVertexArrays(1, &World_VAO);
-	glBindVertexArray(World_VAO);
+	std::tie(World_VAO, World_VBO) = render::upload_model(worldfile);
 
-	glGenBuffers(1, &World_VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, World_VBO);
-	glBufferData(GL_ARRAY_BUFFER, worldfile.objects[0].vertices.size() * sizeof(Vertex),
-	             worldfile.objects[0].vertices.data(), GL_STATIC_DRAW);
+	////////////////
+	// Init stuff //
+	////////////////
 
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat),
-	                      (GLvoid*) (0 * sizeof(GLfloat))); // Position
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat),
-	                      (GLvoid*) (3 * sizeof(GLfloat))); // Texcoords
-	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat),
-	                      (GLvoid*) (5 * sizeof(GLfloat))); // Normals
+	lights::initialize();
+	lights::add(glm::vec3{1.0, 1.0, 1.0}, glm::vec3{0, 0, 0});
+	gamegrid::initialize(11, 11);
 
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
-	glEnableVertexAttribArray(2);
-
-	glBindVertexArray(0);
+	std::uniform_int_distribution<int> gg_uid(0, 5);
+	for (auto&& gg : gamegrid::gamegrid.state) {
+		gg.type = static_cast<gamegrid::StateType>(gg_uid(prng));
+	}
 
 	/////////////////////
 	// Prepare gBuffer //
@@ -283,15 +262,14 @@ int main(int argc, char** argv) {
 	// Game Loop //
 	///////////////
 
-	bool forward = false;
-	bool SSAO = true;
+	bool SSAO = false;
 	bool dynamic_lighting = true;
 	bool loop = true;
-	bool fullscreen = false, gotmouse = true;
+	bool fullscreen = false, gotmouse = false;
 	std::unordered_map<SDL_Keycode, bool> keys;
 	float exposure = 1.0;
 
-	SDL_SetRelativeMouseMode(SDL_TRUE);
+	SDL_SetRelativeMouseMode(SDL_FALSE);
 
 	float mouseX = 0, mouseY = 0;
 	float mouseLX = 0, mouseLY = 0;
@@ -358,19 +336,19 @@ int main(int argc, char** argv) {
 							}
 							break;
 						case SDLK_0:
-							//remove_light(lightcount);
+							// remove_light(lightcount);
 							break;
 						case SDLK_RIGHTBRACKET:
-							//create_light(10);
+							// create_light(10);
 							break;
 						case SDLK_LEFTBRACKET:
-							//remove_light(10);
+							// remove_light(10);
 							break;
 						case SDLK_EQUALS:
-							//create_light(1);
+							// create_light(1);
 							break;
 						case SDLK_MINUS:
-							//remove_light(1);
+							// remove_light(1);
 							break;
 						case SDLK_LALT:
 						case SDLK_RALT:
@@ -381,16 +359,6 @@ int main(int argc, char** argv) {
 								SDL_SetRelativeMouseMode(SDL_TRUE);
 							}
 							gotmouse = !gotmouse;
-							break;
-						case SDLK_m:
-							if (forward) {
-								std::cerr << "Enabling deferred rendering.\n";
-								forward = false;
-							}
-							else {
-								std::cerr << "Enabling forward rendering.\n";
-								forward = true;
-							}
 							break;
 						case SDLK_n:
 							if (SSAO) {
@@ -440,7 +408,9 @@ int main(int argc, char** argv) {
 		}
 		if (keys[SDLK_LCTRL]) {
 			cam.move(glm::vec3(0, -cameraSpeed, 0));
-		}		
+		}
+
+		lights::updatetransforms();
 
 		///////////////////
 		// Geometry Pass //
@@ -464,20 +434,14 @@ int main(int argc, char** argv) {
 		// Use normal depth function
 		glDepthFunc(GL_LESS);
 
-		// Bind monkey vertex data
-		glBindVertexArray(Monkey_VAO);
-		glBindBuffer(GL_ARRAY_BUFFER, Monkey_VBO);
-
-		// Draw elements on the gBuffer
-		glDrawArrays(GL_TRIANGLES, 0, file.objects[0].vertices.size());
+		// render::render_object(Monkey_VAO, Monkey_VBO, file.objects[0].vertices.size(),
+		// uGeoWorld);
 
 		// Bind world vertex data
-		glBindVertexArray(World_VAO);
-		glBindBuffer(GL_ARRAY_BUFFER, World_VBO);
+		render::render_object(World_VAO, World_VBO, worldfile.objects[0].vertices.size(), uGeoWorld,
+		                      world_world);
 
-		glUniformMatrix4fv(uGeoWorld, 1, GL_FALSE, glm::value_ptr(world_world));
-
-		glDrawArrays(GL_TRIANGLES, 0, worldfile.objects[0].vertices.size());
+		gamegrid::render(uGeoWorld);
 
 		// Unbind arrays
 		glBindVertexArray(0);
@@ -495,14 +459,14 @@ int main(int argc, char** argv) {
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, reninfo.lBuffer);
 
 		glBlitFramebuffer(0, 0, sdlm.size.width, sdlm.size.height, 0, 0, sdlm.size.width,
-			                sdlm.size.height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+		                  sdlm.size.height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 
 		if (SSAO) {
 			// Blit depth pass to ssao buffer
 			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, reninfo.ssaoBuffer);
 
 			glBlitFramebuffer(0, 0, sdlm.size.width, sdlm.size.height, 0, 0, sdlm.size.width,
-				                sdlm.size.height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+			                  sdlm.size.height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 		}
 		glBindFramebuffer(GL_FRAMEBUFFER, reninfo.lBuffer);
 
@@ -609,9 +573,10 @@ int main(int argc, char** argv) {
 				glClear(GL_STENCIL_BUFFER_BIT);
 
 				glUniformMatrix4fv(uLightBoundWorld, 1, GL_FALSE,
-					                glm::value_ptr(lights::lighteffectworldmatrix[i]));
+				                   glm::value_ptr(lights::lighteffectworldmatrix[i]));
 				glUniform3fv(uLightBoundLightColor, 1, glm::value_ptr(lights::lightcolor[i]));
-				glUniform3fv(uLightBoundLightPosition, 1, glm::value_ptr(lights::lightdata[i].position));
+				glUniform3fv(uLightBoundLightPosition, 1,
+				             glm::value_ptr(lights::lightdata[i].position));
 				glUniform1f(uLightBoundRadius, lights::lightdata[i].size);
 
 				// Front (near) faces only
@@ -665,7 +630,7 @@ int main(int argc, char** argv) {
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, reninfo.lBuffer);
 
 		glBlitFramebuffer(0, 0, sdlm.size.width, sdlm.size.height, 0, 0, sdlm.size.width,
-			                sdlm.size.height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+		                  sdlm.size.height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 		glBindFramebuffer(GL_FRAMEBUFFER, reninfo.lBuffer);
 
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -695,7 +660,7 @@ int main(int argc, char** argv) {
 			exposure += std::min<float>(diff, 0.2 * fps.get_delta_time());
 		}
 
-#ifdef DLDEBUG
+#ifndef NDEBUG
 // std::cerr << luminosity << " - " << (1.0 / exposure) - (1.0 - 0.3) << '\n';
 #endif
 
@@ -729,6 +694,10 @@ void APIENTRY openglCallbackFunction(GLenum source, GLenum type, GLuint id, GLen
 	(void) source;
 	(void) length;
 	(void) userParam;
+
+	if (type == GL_DEBUG_TYPE_PERFORMANCE) {
+		return;
+	}
 
 	std::cerr << '\n'
 	          << error_num << " > ---------------------opengl-callback-start------------" << '\n';

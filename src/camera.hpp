@@ -28,7 +28,7 @@ class Camera {
   private:
 	void recalculate_view_matrix();
 
-	float yaw   = 0.0f;
+	float yaw = 0.0f;
 	float pitch = 0.0f;
 
 	float speed = 1.0f;
@@ -37,9 +37,6 @@ class Camera {
 	glm::vec3 position;
 	glm::vec3 direction;
 	glm::vec3 front = glm::vec3(0.0f, 0.0f, -1.0f);
-	glm::vec3 up    = glm::vec3(0.0f, 1.0f, 0.0f);
+	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
 	glm::vec3 right = glm::normalize(glm::cross(front, up));
 };
-
-#include "camera_impl.hpp"
-
