@@ -18,10 +18,11 @@ void main() {
 	vec3 Normal  = texture(gNormal, vTexCoords).rgb;
 	vec3 Albedo  = texture(gAlbedoSpec, vTexCoords).rgb;
 	float Spec   = texture(gAlbedoSpec, vTexCoords).a;
-	float ssao   = texture(ssaoInput, vTexCoords).r;
+	//float ssao   = texture(ssaoInput, vTexCoords).r;
+	float ssao = 1.0;
 
 	// Calculate lighting
     float in_sun = clamp(dot(Normal, normalize(sundir)) * 3.0, -1, 1) * 0.5 + 0.5;
-    FragColor = vec4(Albedo * in_sun * ssao + vec3(0.027, 0.027, 0.027) * ssao, 1.0);
+    FragColor = vec4(Albedo  * in_sun * ssao + vec3(0.027, 0.027, 0.027) * ssao, 1.0);
     // FragColor = vec4(vec3(0.0), 1.0);
 }

@@ -10,12 +10,12 @@ uniform mat4 projection;
 
 out vec3 vNormal;
 out vec3 vFragPos;
-out vec3 vTexCoords;
+out vec2 vTexCoords;
 
 void main() {
 	vec4 viewPos = view * world * vec4(position, 1.0);
     gl_Position = projection * viewPos;
     vNormal = normalize(mat3(transpose(inverse(view * world))) * normals);
     vFragPos = vec3(viewPos);
-    vTexCoords = vec3(0, 0, 0);
+    vTexCoords = texcoords;
 }

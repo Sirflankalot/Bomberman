@@ -29,11 +29,31 @@ std::tuple<GLuint, GLuint> render::upload_model(const ObjFile& file) {
 	return std::make_tuple(VAO, VBO);
 }
 
-void render::render_object(GLuint VAO, GLuint VBO, std::size_t vertices,
+GLuint render::upload_texture(const image::image& img) {
+	GLuint id;
+
+	glGenTextures(1, &id);
+	glBindTexture(GL_TEXTURE_2D, id);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, img.width, img.height, 0, GL_RGBA,
+	             GL_UNSIGNED_BYTE, img.data.data());
+	glGenerateMipmap(GL_TEXTURE_2D);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	return id;
+}
+
+void render::render_object(GLuint VAO, GLuint VBO, std::size_t vertices, GLuint tex,
                            GLuint world_matrix_uniform, glm::mat4 world_matrix) {
 	// Bind world vertex data
 	glBindVertexArray(VAO);
 	glBindBuffer(GL_ARRAY_BUFFER, VBO);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, tex);
 
 	glUniformMatrix4fv(world_matrix_uniform, 1, GL_FALSE, glm::value_ptr(world_matrix));
 

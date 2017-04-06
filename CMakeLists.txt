@@ -1,11 +1,17 @@
 cmake_minimum_required(VERSION 3.1.0)
-project(Bomberman)
+project(Bomberman VERSION 0.1.0)
 if(${WIN32})
-	add_compile_options(/std:c++latest)
+	add_compile_options(/std:c++latest /Zc:rvalueCast)
+	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Ox /Ot /GL")
+	set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /Ox /Ot /GL")
+	set(CMAKE_LINK_FLAGS_RELEASE "${CMAKE_LINK_FLAGS_RELEASE} /LTCG:INCREMENTAL /Ox /Ot")
+	set(CMAKE_LINK_FLAGS_RELWITHDEBINFO "${CMAKE_LINK_FLAGS_RELWITHDEBINFO} /LTCG:INCREMENTAL /Ox /Ot")
 else(${WIN32})
 	add_compile_options(-std=c++1z -Wall -Wextra -Wpedantic)
 	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -ffast-math -flto -march=native")
+	set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -Ofast -flto -march=native")
 	set(CMAKE_LINK_FLAGS_RELEASE "${CMAKE_LINK_FLAGS_RELEASE} -O3 -ffast-math -flto -march=native")
+	set(CMAKE_LINK_FLAGS_RELWITHDEBINFO "${CMAKE_LINK_FLAGS_RELWITHDEBINFO} -O3 -ffast-math -flto -march=native")
 endif(${WIN32})
 include_directories(include)
 link_directories(${PROJECT_BINARY_DIR})
@@ -30,6 +36,7 @@ if(Boost_FOUND)
 endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
+set(OLD_CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH})
 
 find_package(GLEW REQUIRED)
 if (GLEW_FOUND)
@@ -44,14 +51,20 @@ endif()
 
 find_package(SDL2 REQUIRED)
 if (SDL2_FOUND)
-	include_directories(${SDL2_INCLUDE_DIR})
+	include_directories(${SDL2_INCLUDE_DIRS})
 	link_libraries(${SDL2_LIBRARY})
 endif()
 
 find_package(OpenGL REQUIRED)
 if (OPENGL_FOUND)
-	include_directories(${OPENGL_INCLUDE_DIR})
+	include_directories(${OPENGL_INCLUDE_DIRS})
 	link_libraries(${OPENGL_LIBRARIES})
+endif()
+
+find_package(PNG REQUIRED)
+if (PNG_FOUND)
+	include_directories(${PNG_INCLUDE_DIRS})
+	link_libraries(${PNG_LIBRARIES})
 endif()
 
 include_directories(.)
@@ -64,6 +77,10 @@ add_custom_command(TARGET Bomberman POST_BUILD
 add_custom_command(TARGET Bomberman POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_directory
                        ${CMAKE_SOURCE_DIR}/objects $<TARGET_FILE_DIR:Bomberman>/objects)
+
+add_custom_command(TARGET Bomberman POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory
+                       ${CMAKE_SOURCE_DIR}/textures $<TARGET_FILE_DIR:Bomberman>/textures)
 
 if(${WIN32})
 	add_custom_command(TARGET Bomberman POST_BUILD

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <fstream>
 #include <iostream>
 #include <iterator>
 #include <memory>
@@ -18,10 +19,13 @@
 #include <vector>
 
 #include "camera.hpp"
+#include "controller.hpp"
 #include "fps_meter.hpp"
 #include "gamegrid.hpp"
+#include "image.hpp"
 #include "light.hpp"
 #include "objparser.hpp"
+#include "player.hpp"
 #include "render.hpp"
 #include "sdlmanager.hpp"
 #include "shader.hpp"
@@ -109,11 +113,12 @@ int main(int argc, char** argv) {
 	auto uGeoWorld = geometrypass.getUniform("world", Shader::MANDITORY);
 	auto uGeoView = geometrypass.getUniform("view", Shader::MANDITORY);
 	auto uGeoProjection = geometrypass.getUniform("projection", Shader::MANDITORY);
+	glUniform1i(geometrypass.getUniform("tex"), 0);
 
 	auto world_world =
 	    glm::scale(glm::translate(glm::mat4(), glm::vec3(0, 0, 0)), glm::vec3(1, 1, 1));
 	auto monkey_world = glm::translate(glm::mat4(), glm::vec3(0, 0, 0));
-	auto projection = glm::perspective(glm::radians(60.0f), sdlm.size.ratio, 0.5f, 1000.0f);
+	auto projection = glm::perspective(glm::radians(40.0f), sdlm.size.ratio, 0.5f, 1000.0f);
 
 	Shader_Program lightingpass;
 	lightingpass.add("shaders/lighting.v.glsl", Shader::VERTEX);
@@ -207,10 +212,15 @@ int main(int argc, char** argv) {
 	lights::initialize();
 	lights::add(glm::vec3{1.0, 1.0, 1.0}, glm::vec3{0, 0, 0});
 	gamegrid::initialize(11, 11);
+	control::initialize();
+	players::initialize();
 
 	std::uniform_int_distribution<int> gg_uid(0, 5);
-	for (auto&& gg : gamegrid::gamegrid.state) {
-		gg.type = static_cast<gamegrid::StateType>(gg_uid(prng));
+	for (std::size_t x = 1; x < gamegrid::gamegrid.width - 1; ++x) {
+		for (std::size_t y = 1; y < gamegrid::gamegrid.height - 1; ++y) {
+			gamegrid::gamegrid.state[y * gamegrid::gamegrid.width + x].type =
+			    static_cast<gamegrid::StateType>(gg_uid(prng));
+		}
 	}
 
 	/////////////////////
@@ -258,6 +268,12 @@ int main(int argc, char** argv) {
 	ssaoPass1.use();
 	glUniform3fv(uSSAOPass1Samples, 64, glm::value_ptr(ssaoKernel[0]));
 
+	image::image nullimg;
+	nullimg.width = 1;
+	nullimg.height = 1;
+	nullimg.data.push_back(image::pixel{255, 255, 255, 255});
+	auto nullimg_tex = render::upload_texture(nullimg);
+
 	///////////////
 	// Game Loop //
 	///////////////
@@ -278,8 +294,10 @@ int main(int argc, char** argv) {
 	(void) mouseLY;
 
 	FPS_Meter fps(true, 2);
-	Camera cam(glm::vec3(0, 10, 25));
-	cam.set_rotation(30, 0);
+	Camera cam(glm::vec3(0, 12, 11));
+	cam.set_rotation(51.5, 0);
+
+	Resize(sdlm, reninfo);
 
 	///////////////
 	// Game Loop //
@@ -298,9 +316,9 @@ int main(int argc, char** argv) {
 		mouseLX = std::exchange(mouseX, mouseX + mouseDX);
 		mouseLY = std::exchange(mouseX, mouseY + mouseDY);
 
-		if (mouseDX || mouseDY) {
-			cam.rotate(mouseDY, mouseDX, 50);
-		}
+		// if (mouseDX || mouseDY) {
+		// 	cam.rotate(mouseDY, mouseDX, 50);
+		// }
 
 		fps.frame(0);
 
@@ -388,9 +406,27 @@ int main(int argc, char** argv) {
 				case SDL_KEYUP:
 					keys[event.key.keysym.sym] = false;
 					break;
+				case SDL_CONTROLLERDEVICEADDED:
+					std::cerr << "Device Added!\n";
+					control::add_controller(event.cdevice);
+					break;
+				case SDL_CONTROLLERDEVICEREMOVED:
+					std::cerr << "Device Removed!\n";
+					control::remove_controller(event.cdevice);
+					break;
+				case SDL_CONTROLLERAXISMOTION:
+					control::controller_axis_movement(event.caxis);
+					break;
+				case SDL_CONTROLLERBUTTONDOWN:
+				case SDL_CONTROLLERBUTTONUP:
+					control::controller_button_press(event.cbutton);
+					break;
 			}
 		}
-
+		if (keys[SDLK_0]) {
+			cam.set_location(glm::vec3(0, 12, 11));
+			cam.set_rotation(51.5, 0);
+		}
 		if (keys[SDLK_w]) {
 			cam.move(glm::vec3(0, 0, cameraSpeed));
 		}
@@ -411,6 +447,7 @@ int main(int argc, char** argv) {
 		}
 
 		lights::updatetransforms();
+		players::update_players(control::movement_report(), fps.get_delta_time());
 
 		///////////////////
 		// Geometry Pass //
@@ -438,10 +475,12 @@ int main(int argc, char** argv) {
 		// uGeoWorld);
 
 		// Bind world vertex data
-		render::render_object(World_VAO, World_VBO, worldfile.objects[0].vertices.size(), uGeoWorld,
-		                      world_world);
+		render::render_object(World_VAO, World_VBO, worldfile.objects[0].vertices.size(),
+		                      nullimg_tex, uGeoWorld, world_world);
 
 		gamegrid::render(uGeoWorld);
+
+		players::render(uGeoWorld);
 
 		// Unbind arrays
 		glBindVertexArray(0);
@@ -947,5 +986,5 @@ glm::mat4 Resize(SDL_Manager& sdlm, RenderInfo& data) {
 	sdlm.refresh_size();
 	DeleteBuffers(data);
 	PrepareBuffers(sdlm.size.width, sdlm.size.height, data);
-	return glm::perspective(glm::radians(60.0f), sdlm.size.ratio, 0.5f, 1000.0f);
+	return glm::perspective(glm::radians(40.0f), sdlm.size.ratio, 0.5f, 1000.0f);
 }

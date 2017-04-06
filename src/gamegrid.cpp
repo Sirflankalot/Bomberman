@@ -1,4 +1,5 @@
 #include "gamegrid.hpp"
+#include "image.hpp"
 #include "render.hpp"
 
 #include <glm/glm.hpp>
@@ -15,6 +16,10 @@ GLuint spikeycube_vao, spikeycube_vbo;
 GLuint bomb_vao, bomb_vbo;
 GLuint bullet_vao, bullet_vbo;
 
+GLuint spikeycube_tex;
+GLuint bomb_tex;
+GLuint bullet_tex;
+
 void gamegrid::initialize(std::size_t width, std::size_t height) {
 	gamegrid.width = width;
 	gamegrid.height = height;
@@ -28,6 +33,9 @@ void gamegrid::initialize(std::size_t width, std::size_t height) {
 	std::tie(spikeycube_vao, spikeycube_vbo) = render::upload_model(spikeycube);
 	std::tie(bomb_vao, bomb_vbo) = render::upload_model(bomb);
 	std::tie(bullet_vao, bullet_vbo) = render::upload_model(bullet);
+
+	auto bullet_diff = image::create_ogl_image("textures/bullet.png");
+	bullet_tex = render::upload_texture(bullet_diff);
 }
 
 void gamegrid::render(GLuint world_matrix_uniform) {
@@ -52,16 +60,16 @@ void gamegrid::render(GLuint world_matrix_uniform) {
 				break;
 			case StateType::powerup_ammo:
 				render::render_object(bullet_vao, bullet_vbo, bullet.objects[0].vertices.size(),
-				                      world_matrix_uniform, world);
+				                      bullet_tex, world_matrix_uniform, world);
 				break;
 			case StateType::powerup_bomb:
-				render::render_object(bomb_vao, bomb_vbo, bomb.objects[0].vertices.size(),
+				render::render_object(bomb_vao, bomb_vbo, bomb.objects[0].vertices.size(), bomb_tex,
 				                      world_matrix_uniform, world);
 				break;
 			case StateType::trap:
 				render::render_object(spikeycube_vao, spikeycube_vbo,
-				                      spikeycube.objects[0].vertices.size(), world_matrix_uniform,
-				                      world);
+				                      spikeycube.objects[0].vertices.size(), spikeycube_tex,
+				                      world_matrix_uniform, world);
 				break;
 		}
 	}

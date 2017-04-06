@@ -43,7 +43,6 @@ namespace lights {
 		return lightptr;
 	}
 
-	// TODO: Reimpliment removal
 	void remove(std::size_t num) {
 		num = translation[num];
 #ifndef NDEBUG
