@@ -1,4 +1,6 @@
 #include "player.hpp"
+#include "bomb.hpp"
+#include "bullet.hpp"
 #include "gamegrid.hpp"
 #include "image.hpp"
 #include "objparser.hpp"
@@ -10,39 +12,19 @@
 
 std::array<players::player_info, 4> players::player_list;
 
-std::size_t player_vertex_count;
+static std::size_t player_vertex_count;
 
-GLuint player_vao, player_vbo;
-std::array<GLuint, 4> player_texture;
+static GLuint player_vao, player_vbo;
+static std::array<GLuint, 4> player_texture;
+
+static std::array<float, 4> time_since_bullet{0.0f, 0.0f, 0.0f, 0.0f};
+static std::array<float, 4> time_since_bomb{0.0f, 0.0f, 0.0f, 0.0f};
 
 void players::initialize() {
-	player_list[0].loc_x = 0;
-	player_list[0].loc_y = 0;
-	player_list[0].last_x = 0;
-	player_list[0].last_y = 0;
-	player_list[0].factor = 1.0f;
-	player_list[0].dir = player_info::direction::right;
-
-	player_list[1].loc_x = gamegrid::gamegrid.width - 1;
-	player_list[1].loc_y = 0;
-	player_list[1].last_x = 0;
-	player_list[1].last_y = 0;
-	player_list[1].factor = 1.0f;
-	player_list[1].dir = player_info::direction::down;
-
-	player_list[2].loc_x = gamegrid::gamegrid.width - 1;
-	player_list[2].loc_y = gamegrid::gamegrid.height - 1;
-	player_list[2].last_x = 0;
-	player_list[2].last_y = 0;
-	player_list[2].factor = 1.0f;
-	player_list[2].dir = player_info::direction::left;
-
-	player_list[3].loc_x = 0;
-	player_list[3].loc_y = gamegrid::gamegrid.height - 1;
-	player_list[3].last_x = 0;
-	player_list[3].last_y = 0;
-	player_list[3].factor = 1.0f;
-	player_list[3].dir = player_info::direction::up;
+	respawn(0);
+	respawn(1);
+	respawn(2);
+	respawn(3);
 
 	ObjFile model = parse_obj_file("objects/monster.obj");
 	std::tie(player_vao, player_vbo) = render::upload_model(model);
@@ -65,8 +47,7 @@ void players::update_players(const control::movement_report_type& report, float 
 
 		if (!controller.active) {
 			player.active = false;
-			player.factor = 1.0f;
-			player.animated = false;
+			respawn(i);
 			continue;
 		}
 		else {
@@ -86,17 +67,15 @@ void players::update_players(const control::movement_report_type& report, float 
 			    gamegrid::gamegrid.state[player.loc_y * gamegrid::gamegrid.width + player.loc_x];
 
 			switch (current_block.type) {
-				case gamegrid::StateType::powerup_trap:
-					player.power = player_info::powerup::trap;
-					current_block.type = gamegrid::StateType::empty;
-					break;
 				case gamegrid::StateType::powerup_ammo:
 					player.ammo_count += 2;
 					current_block.type = gamegrid::StateType::empty;
 					break;
 				case gamegrid::StateType::powerup_bomb:
-					player.power = player_info::powerup::bomb;
-					current_block.type = gamegrid::StateType::empty;
+					if (player.power != player_info::powerup::bomb) {
+						player.power = player_info::powerup::bomb;
+						current_block.type = gamegrid::StateType::empty;
+					}
 					break;
 				case gamegrid::StateType::trap:
 					respawn(i);
@@ -141,6 +120,43 @@ void players::update_players(const control::movement_report_type& report, float 
 					break;
 			}
 		}
+
+		if (controller.rtrigger && time_since_bullet[i] >= 0.5f && player.ammo_count >= 1) {
+			time_since_bullet[i] = 0;
+			player.ammo_count -= 1;
+			auto grid_loc = glm::mix(glm::vec2(player.last_x, player.last_y),
+			                         glm::vec2(player.loc_x, player.loc_y), player.factor);
+			glm::vec2 velocity;
+
+			constexpr float bullet_speed = 15.0f;
+			switch (player.dir) {
+				case player_info::direction::left:
+					velocity = glm::vec2(-bullet_speed, 0.0f);
+					break;
+				case player_info::direction::right:
+					velocity = glm::vec2(bullet_speed, 0.0f);
+					break;
+				case player_info::direction::up:
+					velocity = glm::vec2(0.0f, -bullet_speed);
+					break;
+				case player_info::direction::down:
+					velocity = glm::vec2(0.0f, bullet_speed);
+					break;
+			}
+
+			bullet::add_bullet(grid_loc.x, grid_loc.y, velocity.x, velocity.y, 10.0f);
+		}
+		if (controller.ltrigger && time_since_bomb[i] >= 2.0f &&
+		    player.power == player_info::powerup::bomb) {
+			time_since_bomb[i] = 0;
+
+			player.power = player_info::powerup::none;
+
+			bomb::add_bomb(player.loc_x, player.loc_y, 1.5f);
+		}
+
+		time_since_bullet[i] += time_elapsed;
+		time_since_bomb[i] += time_elapsed;
 	}
 }
 
@@ -168,12 +184,33 @@ void players::render(GLuint world_matrix_uniform) {
 void players::respawn(std::size_t player_index) {
 	auto&& player = player_list[player_index];
 
-	player.loc_x = 0;
-	player.loc_y = 0;
+	switch (player_index) {
+		case 0:
+			player.loc_x = 0;
+			player.loc_y = 0;
+			player.dir = player_info::direction::right;
+			break;
+		case 1:
+			player.loc_x = gamegrid::gamegrid.width - 1;
+			player.loc_y = 0;
+			player.dir = player_info::direction::down;
+			break;
+		case 2:
+			player.loc_x = gamegrid::gamegrid.width - 1;
+			player.loc_y = gamegrid::gamegrid.height - 1;
+			player.dir = player_info::direction::left;
+			break;
+		case 3:
+			player.loc_x = 0;
+			player.loc_y = gamegrid::gamegrid.height - 1;
+			player.dir = player_info::direction::up;
+			break;
+	}
+
+	player.factor = 1.0f;
+	player.animated = false;
 	player.last_x = 0;
 	player.last_y = 0;
-	player.factor = 1.0f;
-	player.dir = player_info::direction::right;
-	player.power = player_info::powerup::none;
 	player.ammo_count = 1;
+	player.power = player_info::powerup::none;
 }

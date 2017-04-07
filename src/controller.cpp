@@ -218,6 +218,8 @@ control::movement_report_type control::movement_report() {
 
 		report_section.active = player.id != nullptr;
 
+		report_section.keys = player.keys;
+
 		// if (i != 0) {
 		// 	continue;
 		// }

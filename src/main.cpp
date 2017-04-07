@@ -18,6 +18,8 @@
 #include <utility>
 #include <vector>
 
+#include "bomb.hpp"
+#include "bullet.hpp"
 #include "camera.hpp"
 #include "controller.hpp"
 #include "fps_meter.hpp"
@@ -29,6 +31,7 @@
 #include "render.hpp"
 #include "sdlmanager.hpp"
 #include "shader.hpp"
+#include "ui.hpp"
 
 #ifdef _WIN32
 #define APIENTRY __stdcall
@@ -48,7 +51,6 @@ struct RenderInfo {
 
 void APIENTRY openglCallbackFunction(GLenum, GLenum, GLuint, GLenum, GLsizei, const GLchar*,
                                      const void*);
-void RenderFullscreenQuad();
 void PrepareBuffers(size_t x, size_t y, RenderInfo& data);
 void DeleteBuffers(RenderInfo& data);
 glm::mat4 Resize(SDL_Manager& sdlm, RenderInfo& data);
@@ -135,28 +137,28 @@ int main(int argc, char** argv) {
 	glUniform1i(lightingpass.getUniform("gAlbedoSpec"), 2);
 	glUniform1i(lightingpass.getUniform("ssaoInput"), 5);
 
-	Shader_Program lightbound;
-	lightbound.add("shaders/lighteffect.v.glsl", Shader::VERTEX);
-	lightbound.add("shaders/lighteffect.f.glsl", Shader::FRAGMENT);
-	lightbound.compile();
-	lightbound.link();
+	// Shader_Program lightbound;
+	// lightbound.add("shaders/lighteffect.v.glsl", Shader::VERTEX);
+	// lightbound.add("shaders/lighteffect.f.glsl", Shader::FRAGMENT);
+	// lightbound.compile();
+	// lightbound.link();
 
-	auto uLightBoundWorld = lightbound.getUniform("world", Shader::MANDITORY);
-	auto uLightBoundView = lightbound.getUniform("view", Shader::MANDITORY);
-	auto uLightBoundPerspective = lightbound.getUniform("perspective", Shader::MANDITORY);
+	// auto uLightBoundWorld = lightbound.getUniform("world", Shader::MANDITORY);
+	// auto uLightBoundView = lightbound.getUniform("view", Shader::MANDITORY);
+	// auto uLightBoundPerspective = lightbound.getUniform("perspective", Shader::MANDITORY);
 
-	auto uLightBoundViewPos = lightbound.getUniform("viewPos");
-	auto uLightBoundResolution = lightbound.getUniform("resolution");
+	// auto uLightBoundViewPos = lightbound.getUniform("viewPos");
+	// auto uLightBoundResolution = lightbound.getUniform("resolution");
 
-	auto uLightBoundLightPosition = lightbound.getUniform("lightposition");
-	auto uLightBoundLightColor = lightbound.getUniform("lightcolor");
+	// auto uLightBoundLightPosition = lightbound.getUniform("lightposition");
+	// auto uLightBoundLightColor = lightbound.getUniform("lightcolor");
 
-	auto uLightBoundRadius = lightbound.getUniform("radius");
+	// auto uLightBoundRadius = lightbound.getUniform("radius");
 
-	lightbound.use();
-	glUniform1i(lightbound.getUniform("gPosition"), 0);
-	glUniform1i(lightbound.getUniform("gNormal"), 1);
-	glUniform1i(lightbound.getUniform("gAlbedoSpec"), 2);
+	// lightbound.use();
+	// glUniform1i(lightbound.getUniform("gPosition"), 0);
+	// glUniform1i(lightbound.getUniform("gNormal"), 1);
+	// glUniform1i(lightbound.getUniform("gAlbedoSpec"), 2);
 
 	Shader_Program ssaoPass1;
 	ssaoPass1.add("shaders/lighting.v.glsl", Shader::VERTEX);
@@ -209,19 +211,14 @@ int main(int argc, char** argv) {
 	// Init stuff //
 	////////////////
 
-	lights::initialize();
-	lights::add(glm::vec3{1.0, 1.0, 1.0}, glm::vec3{0, 0, 0});
+	// lights::initialize();
+	// lights::add(glm::vec3{1.0, 1.0, 1.0}, glm::vec3{0, 0, 0});
 	gamegrid::initialize(11, 11);
 	control::initialize();
 	players::initialize();
-
-	std::uniform_int_distribution<int> gg_uid(0, 5);
-	for (std::size_t x = 1; x < gamegrid::gamegrid.width - 1; ++x) {
-		for (std::size_t y = 1; y < gamegrid::gamegrid.height - 1; ++y) {
-			gamegrid::gamegrid.state[y * gamegrid::gamegrid.width + x].type =
-			    static_cast<gamegrid::StateType>(gg_uid(prng));
-		}
-	}
+	bullet::initialize();
+	bomb::initialize();
+	ui::initialize();
 
 	/////////////////////
 	// Prepare gBuffer //
@@ -294,8 +291,8 @@ int main(int argc, char** argv) {
 	(void) mouseLY;
 
 	FPS_Meter fps(true, 2);
-	Camera cam(glm::vec3(0, 12, 11));
-	cam.set_rotation(51.5, 0);
+	Camera cam(glm::vec3(0, 11, 12));
+	cam.set_rotation(45.5, 0);
 
 	Resize(sdlm, reninfo);
 
@@ -446,8 +443,12 @@ int main(int argc, char** argv) {
 			cam.move(glm::vec3(0, -cameraSpeed, 0));
 		}
 
-		lights::updatetransforms();
-		players::update_players(control::movement_report(), fps.get_delta_time());
+		// lights::updatetransforms();
+		auto move_report = control::movement_report();
+		players::update_players(move_report, fps.get_delta_time());
+		bullet::update_bullets(fps.get_delta_time());
+		bomb::update_bombs(fps.get_delta_time());
+		gamegrid::read_controls(move_report);
 
 		///////////////////
 		// Geometry Pass //
@@ -479,8 +480,9 @@ int main(int argc, char** argv) {
 		                      nullimg_tex, uGeoWorld, world_world);
 
 		gamegrid::render(uGeoWorld);
-
 		players::render(uGeoWorld);
+		bullet::render(uGeoWorld);
+		bomb::render(uGeoWorld);
 
 		// Unbind arrays
 		glBindVertexArray(0);
@@ -542,14 +544,14 @@ int main(int argc, char** argv) {
 
 			glUniformMatrix4fv(uSSAOPass1Projection, 1, GL_FALSE, glm::value_ptr(projection));
 
-			RenderFullscreenQuad();
+			render::render_fullscreen_quad();
 
 			ssaoPass2.use();
 
 			glBindFramebuffer(GL_FRAMEBUFFER, reninfo.ssaoBlurBuffer);
 			glClear(GL_COLOR_BUFFER_BIT);
 
-			RenderFullscreenQuad();
+			render::render_fullscreen_quad();
 		}
 		else {
 			glBindFramebuffer(GL_FRAMEBUFFER, reninfo.ssaoBlurBuffer);
@@ -579,7 +581,7 @@ int main(int argc, char** argv) {
 		glUniform3fv(uLightViewPos, 1, glm::value_ptr(cam.get_location()));
 
 		// Render a quad
-		RenderFullscreenQuad();
+		render::render_fullscreen_quad();
 
 		glDepthMask(GL_TRUE);
 
@@ -587,82 +589,82 @@ int main(int argc, char** argv) {
 		// Calculate Per Light Lighting //
 		//////////////////////////////////
 
-		if (dynamic_lighting) {
-			lightbound.use();
+		// if (dynamic_lighting) {
+		// 	lightbound.use();
 
-			glBindVertexArray(lights::Light_VAO);
+		// 	glBindVertexArray(lights::Light_VAO);
 
-			glUniformMatrix4fv(uLightBoundPerspective, 1, GL_FALSE, glm::value_ptr(projection));
-			glUniformMatrix4fv(uLightBoundView, 1, GL_FALSE, glm::value_ptr(cam.get_matrix()));
-			glUniform3fv(uLightBoundViewPos, 1, glm::value_ptr(cam.get_location()));
-			glUniform2f(uLightBoundResolution, sdlm.size.width, sdlm.size.height);
+		// 	glUniformMatrix4fv(uLightBoundPerspective, 1, GL_FALSE, glm::value_ptr(projection));
+		// 	glUniformMatrix4fv(uLightBoundView, 1, GL_FALSE, glm::value_ptr(cam.get_matrix()));
+		// 	glUniform3fv(uLightBoundViewPos, 1, glm::value_ptr(cam.get_location()));
+		// 	glUniform2f(uLightBoundResolution, sdlm.size.width, sdlm.size.height);
 
-			glDepthFunc(GL_LESS);
-			glDepthMask(GL_FALSE);
+		// 	glDepthFunc(GL_LESS);
+		// 	glDepthMask(GL_FALSE);
 
-			glEnable(GL_BLEND);
-			glBlendFunc(GL_ONE, GL_ONE);
+		// 	glEnable(GL_BLEND);
+		// 	glBlendFunc(GL_ONE, GL_ONE);
 
-			glEnable(GL_STENCIL_TEST);
+		// 	glEnable(GL_STENCIL_TEST);
 
-			glDisableVertexAttribArray(0);
-			glEnableVertexAttribArray(7);
+		// 	glDisableVertexAttribArray(0);
+		// 	glEnableVertexAttribArray(7);
 
-			for (size_t i = 0; i < lights::lightcount; ++i) {
-				glClear(GL_STENCIL_BUFFER_BIT);
+		// 	for (size_t i = 0; i < lights::lightcount; ++i) {
+		// 		glClear(GL_STENCIL_BUFFER_BIT);
 
-				glUniformMatrix4fv(uLightBoundWorld, 1, GL_FALSE,
-				                   glm::value_ptr(lights::lighteffectworldmatrix[i]));
-				glUniform3fv(uLightBoundLightColor, 1, glm::value_ptr(lights::lightcolor[i]));
-				glUniform3fv(uLightBoundLightPosition, 1,
-				             glm::value_ptr(lights::lightdata[i].position));
-				glUniform1f(uLightBoundRadius, lights::lightdata[i].size);
+		// 		glUniformMatrix4fv(uLightBoundWorld, 1, GL_FALSE,
+		// 		                   glm::value_ptr(lights::lighteffectworldmatrix[i]));
+		// 		glUniform3fv(uLightBoundLightColor, 1, glm::value_ptr(lights::lightcolor[i]));
+		// 		glUniform3fv(uLightBoundLightPosition, 1,
+		// 		             glm::value_ptr(lights::lightdata[i].position));
+		// 		glUniform1f(uLightBoundRadius, lights::lightdata[i].size);
 
-				// Front (near) faces only
-				// Colour write is disabled
-				// Z-write is disabled
-				// Z function is 'Less/Equal'
-				// Z-Fail writes non-zero value to Stencil buffer (for example,
-				// 'Increment-Saturate')
-				// Stencil test result does not modify Stencil buffer
+		// 		// Front (near) faces only
+		// 		// Colour write is disabled
+		// 		// Z-write is disabled
+		// 		// Z function is 'Less/Equal'
+		// 		// Z-Fail writes non-zero value to Stencil buffer (for example,
+		// 		// 'Increment-Saturate')
+		// 		// Stencil test result does not modify Stencil buffer
 
-				glCullFace(GL_BACK);
-				glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-				glDepthMask(GL_FALSE);
-				glDepthFunc(GL_LEQUAL);
-				glStencilMask(GL_TRUE);
-				glStencilOp(GL_KEEP, GL_INCR, GL_KEEP);
-				glStencilFunc(GL_ALWAYS, 0, 0xFF);
+		// 		glCullFace(GL_BACK);
+		// 		glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+		// 		glDepthMask(GL_FALSE);
+		// 		glDepthFunc(GL_LEQUAL);
+		// 		glStencilMask(GL_TRUE);
+		// 		glStencilOp(GL_KEEP, GL_INCR, GL_KEEP);
+		// 		glStencilFunc(GL_ALWAYS, 0, 0xFF);
 
-				glDrawArrays(GL_TRIANGLES, 0, lights::circlefile.objects[0].vertices.size());
+		// 		glDrawArrays(GL_TRIANGLES, 0, lights::circlefile.objects[0].vertices.size());
 
-				// Back (far) faces only
-				// Colour write enabled
-				// Z-write is disabled
-				// Z function is 'Greater/Equal'
-				// Stencil function is 'Equal' (Stencil ref = zero)
-				// Always clears Stencil to zero
+		// 		// Back (far) faces only
+		// 		// Colour write enabled
+		// 		// Z-write is disabled
+		// 		// Z function is 'Greater/Equal'
+		// 		// Stencil function is 'Equal' (Stencil ref = zero)
+		// 		// Always clears Stencil to zero
 
-				glCullFace(GL_FRONT);
-				glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-				// Z-write already disabled
-				glDepthFunc(GL_GEQUAL);
-				glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-				glStencilFunc(GL_EQUAL, 0, 0x00);
+		// 		glCullFace(GL_FRONT);
+		// 		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		// 		// Z-write already disabled
+		// 		glDepthFunc(GL_GEQUAL);
+		// 		glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+		// 		glStencilFunc(GL_EQUAL, 0, 0x00);
 
-				glDrawArrays(GL_TRIANGLES, 0, lights::circlefile.objects[0].vertices.size());
-			}
+		// 		glDrawArrays(GL_TRIANGLES, 0, lights::circlefile.objects[0].vertices.size());
+		// 	}
 
-			glDisableVertexAttribArray(7);
-			glEnableVertexAttribArray(0);
+		// 	glDisableVertexAttribArray(7);
+		// 	glEnableVertexAttribArray(0);
 
-			glCullFace(GL_BACK);
-			glDepthMask(GL_TRUE);
-			glDepthFunc(GL_LEQUAL);
-			glStencilFunc(GL_ALWAYS, 0, 0xFF);
-			glDisable(GL_STENCIL_TEST);
-			glDisable(GL_BLEND);
-		}
+		// 	glCullFace(GL_BACK);
+		// 	glDepthMask(GL_TRUE);
+		// 	glDepthFunc(GL_LEQUAL);
+		// 	glStencilFunc(GL_ALWAYS, 0, 0xFF);
+		// 	glDisable(GL_STENCIL_TEST);
+		// 	glDisable(GL_BLEND);
+		// }
 
 		// Blit depth pass to current depth
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, reninfo.gBuffer);
@@ -714,7 +716,9 @@ int main(int argc, char** argv) {
 
 		glDisable(GL_DEPTH_TEST);
 
-		RenderFullscreenQuad();
+		render::render_fullscreen_quad();
+
+		ui::render(sdlm.size.width, sdlm.size.height);
 
 		glEnable(GL_DEPTH_TEST);
 
@@ -781,35 +785,6 @@ void APIENTRY openglCallbackFunction(GLenum source, GLenum type, GLuint id, GLen
 	std::cerr << "---------------------opengl-callback-end--------------" << '\n';
 
 	++error_num;
-}
-
-// RenderQuad() Renders a 1x1 quad in NDC, best used for framebuffer color
-// targets
-// and post-processing effects.
-GLuint quadVAO = 0;
-GLuint quadVBO;
-void RenderFullscreenQuad() {
-	if (quadVAO == 0) {
-		constexpr GLfloat quadVertices[] = {
-		    // Positions            // Texture Coords
-		    -1.0f, 1.0f, 1.0f, 0.0f, 1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 0.0f,
-		    1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 1.0f,  -1.0f, 1.0f, 1.0f, 0.0f,
-		};
-		// Setup plane VAO
-		glGenVertexArrays(1, &quadVAO);
-		glGenBuffers(1, &quadVBO);
-		glBindVertexArray(quadVAO);
-		glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*) 0);
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat),
-		                      (GLvoid*) (3 * sizeof(GLfloat)));
-	}
-	glBindVertexArray(quadVAO);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-	glBindVertexArray(0);
 }
 
 void Check_RenderBuffer() {

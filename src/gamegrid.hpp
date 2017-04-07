@@ -1,11 +1,12 @@
 #pragma once
 
+#include "controller.hpp"
 #include "objparser.hpp"
 #include <GL/glew.h>
 #include <vector>
 
 namespace gamegrid {
-	enum class StateType { empty, block, powerup_trap, powerup_ammo, powerup_bomb, trap };
+	enum class StateType { empty = 0, powerup_ammo = 1, powerup_bomb = 2, trap = 3 };
 
 	struct State {
 		StateType type;
@@ -26,4 +27,6 @@ namespace gamegrid {
 
 	void initialize(std::size_t width, std::size_t height);
 	void render(GLuint world_matrix_uniform);
+	void regenerate();
+	void read_controls(const control::movement_report_type& rt);
 }

@@ -1,9 +1,14 @@
 #include "gamegrid.hpp"
+#include "controller.hpp"
 #include "image.hpp"
+#include "player.hpp"
 #include "render.hpp"
 
+#include <algorithm>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <iostream>
+#include <random>
 #include <tuple>
 
 gamegrid::GameGrid gamegrid::gamegrid;
@@ -12,13 +17,13 @@ ObjFile gamegrid::spikeycube;
 ObjFile gamegrid::bomb;
 ObjFile gamegrid::bullet;
 
-GLuint spikeycube_vao, spikeycube_vbo;
-GLuint bomb_vao, bomb_vbo;
-GLuint bullet_vao, bullet_vbo;
+static GLuint spikeycube_vao, spikeycube_vbo;
+static GLuint bomb_vao, bomb_vbo;
+static GLuint bullet_vao, bullet_vbo;
 
-GLuint spikeycube_tex;
-GLuint bomb_tex;
-GLuint bullet_tex;
+static GLuint spikeycube_tex;
+static GLuint bomb_tex;
+static GLuint bullet_tex;
 
 void gamegrid::initialize(std::size_t width, std::size_t height) {
 	gamegrid.width = width;
@@ -34,8 +39,39 @@ void gamegrid::initialize(std::size_t width, std::size_t height) {
 	std::tie(bomb_vao, bomb_vbo) = render::upload_model(bomb);
 	std::tie(bullet_vao, bullet_vbo) = render::upload_model(bullet);
 
-	auto bullet_diff = image::create_ogl_image("textures/bullet.png");
-	bullet_tex = render::upload_texture(bullet_diff);
+	auto bullet_raw = image::create_ogl_image("textures/bullet.png");
+	bullet_tex = render::upload_texture(bullet_raw);
+
+	auto bomb_raw = image::create_ogl_image("textures/bomb.png");
+	bomb_tex = render::upload_texture(bomb_raw);
+
+	auto spikes_raw = image::create_ogl_image("textures/spikes.png");
+	spikeycube_tex = render::upload_texture(spikes_raw);
+
+	regenerate();
+}
+
+void gamegrid::read_controls(const typename control::movement_report_type& rt) {
+	if (std::any_of(rt.begin(), rt.end(),
+	                [](auto controller) { return controller.keys[6] && controller.active; })) {
+		regenerate();
+		players::respawn(0);
+		players::respawn(1);
+		players::respawn(2);
+		players::respawn(3);
+	}
+}
+
+void gamegrid::regenerate() {
+	static std::mt19937 prng{std::random_device{}()};
+
+	std::uniform_int_distribution<int> gg_uid(0, 3);
+	for (std::size_t x = 1; x < gamegrid::gamegrid.width - 1; ++x) {
+		for (std::size_t y = 1; y < gamegrid::gamegrid.height - 1; ++y) {
+			gamegrid::gamegrid.state[y * gamegrid::gamegrid.width + x].type =
+			    static_cast<gamegrid::StateType>(gg_uid(prng));
+		}
+	}
 }
 
 void gamegrid::render(GLuint world_matrix_uniform) {
@@ -53,10 +89,6 @@ void gamegrid::render(GLuint world_matrix_uniform) {
 
 		switch (gamegrid.state[i].type) {
 			case StateType::empty:
-				break;
-			case StateType::block:
-				break;
-			case StateType::powerup_trap:
 				break;
 			case StateType::powerup_ammo:
 				render::render_object(bullet_vao, bullet_vbo, bullet.objects[0].vertices.size(),
