@@ -31,9 +31,9 @@ void Camera::set_rotation(const float new_pitch, const float new_yaw) {
 	yaw = new_yaw;
 	// std::cerr << "Pitch: " << pitch << " Yaw: " << yaw << "\n";
 
-	front.x = cos(glm::radians(pitch)) * sin(glm::radians(yaw));
-	front.y = -sin(glm::radians(pitch));
-	front.z = -cos(glm::radians(pitch)) * cos(glm::radians(yaw));
+	front.x = std::cos(glm::radians(pitch)) * std::sin(glm::radians(yaw));
+	front.y = -std::sin(glm::radians(pitch));
+	front.z = -std::cos(glm::radians(pitch)) * std::cos(glm::radians(yaw));
 	front = glm::normalize(front);
 	// std::cerr << front.x << ", " << front.y << ", " << front.z << '\n';
 	right = glm::normalize(glm::cross(front, up));

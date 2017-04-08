@@ -73,11 +73,11 @@ void bullet::update_bullets(float time_elapsed) {
 			continue;
 		}
 
-		int32_t block_x = std::round(bd.loc_x);
-		int32_t block_y = std::round(bd.loc_y);
+		int32_t block_x = static_cast<int32_t>(std::round(bd.loc_x));
+		int32_t block_y = static_cast<int32_t>(std::round(bd.loc_y));
 
-		if (0 <= block_x && block_x < (int64_t) gamegrid::gamegrid.width && //
-		    0 <= block_y && block_y < (int64_t) gamegrid::gamegrid.height) {
+		if (0 <= block_x && block_x < static_cast<int64_t>(gamegrid::gamegrid.width) && //
+		    0 <= block_y && block_y < static_cast<int64_t>(gamegrid::gamegrid.height)) {
 			auto&& block = gamegrid::gamegrid.state[block_y * gamegrid::gamegrid.width + block_x];
 
 			// Check for collisions
@@ -97,8 +97,8 @@ void bullet::update_bullets(float time_elapsed) {
 				    }
 				    auto grid_loc = glm::mix(glm::vec2(pi.last_x, pi.last_y),
 				                             glm::vec2(pi.loc_x, pi.loc_y), pi.factor);
-				    return std::abs(grid_loc.x - block_x) < 0.7 &&
-				           std::abs(grid_loc.y - block_y) < 0.7;
+				    return std::abs(grid_loc.x - static_cast<float>(block_x)) < 0.7 &&
+				           std::abs(grid_loc.y - static_cast<float>(block_y)) < 0.7;
 				});
 
 			bool found = found_itr != players::player_list.end();

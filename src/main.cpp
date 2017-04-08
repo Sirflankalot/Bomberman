@@ -51,7 +51,8 @@ struct RenderInfo {
 
 void APIENTRY openglCallbackFunction(GLenum, GLenum, GLuint, GLenum, GLsizei, const GLchar*,
                                      const void*);
-void PrepareBuffers(size_t x, size_t y, RenderInfo& data);
+void Check_RenderBuffer();
+void PrepareBuffers(int x, int y, RenderInfo& data);
 void DeleteBuffers(RenderInfo& data);
 glm::mat4 Resize(SDL_Manager& sdlm, RenderInfo& data);
 
@@ -242,7 +243,7 @@ int main(int argc, char** argv) {
 			glm::vec3 sample(negFloats(prng), negFloats(prng), unitFloats(prng));
 			sample = glm::normalize(sample);
 			sample *= unitFloats(prng);
-			float scale = static_cast<float>(i) / 64.0;
+			float scale = static_cast<float>(i) / 64.0f;
 
 			scale = lerp(0.1f, 1.0f, scale * scale);
 			sample *= scale;
@@ -304,8 +305,8 @@ int main(int argc, char** argv) {
 		int mousePixelX, mousePixelY;
 		SDL_GetRelativeMouseState(&mousePixelX, &mousePixelY);
 
-		mouseDX = (mousePixelX / (float) sdlm.size.height);
-		mouseDY = (mousePixelY / (float) sdlm.size.height);
+		mouseDX = (float(mousePixelX) / float(sdlm.size.height));
+		mouseDY = (float(mousePixelY) / float(sdlm.size.height));
 
 		mouseX = mouseX + mouseDX;
 		mouseY = mouseY + mouseDY;
@@ -417,6 +418,8 @@ int main(int argc, char** argv) {
 				case SDL_CONTROLLERBUTTONDOWN:
 				case SDL_CONTROLLERBUTTONUP:
 					control::controller_button_press(event.cbutton);
+					break;
+				default:
 					break;
 			}
 		}
@@ -567,7 +570,7 @@ int main(int argc, char** argv) {
 		///////////////////
 
 		// Clear color
-		glClearColor(0.118, 0.428, 0.860, 1);
+		glClearColor(0.118f, 0.428f, 0.860f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		lightingpass.use();
@@ -685,20 +688,20 @@ int main(int argc, char** argv) {
 		glBindTexture(GL_TEXTURE_2D, reninfo.lColor);
 		glGenerateMipmap(GL_TEXTURE_2D);
 
-		size_t mipmap_levels =
-		    1 + std::floor(std::log2(std::max(sdlm.size.width, sdlm.size.height)));
+		int mipmap_levels =
+		    1 + int(std::floor(std::log2(std::max(sdlm.size.width, sdlm.size.height))));
 		glm::vec3 avg;
 		glGetTexImage(GL_TEXTURE_2D, mipmap_levels - 1, GL_RGB, GL_FLOAT, glm::value_ptr(avg));
 
 		// Change exposure
-		float luminosity = 0.21 * avg.r + 0.71 * avg.g + 0.07 * avg.b;
-		float newexposure = 1.0 / (luminosity + (1.0 - 0.4));
+		float luminosity = 0.21f * avg.r + 0.71f * avg.g + 0.07f * avg.b;
+		float newexposure = 1.0f / (luminosity + (1.0f - 0.4f));
 		float diff = newexposure - exposure;
 		if (diff < 0) {
-			exposure += (diff * fps.get_delta_time()) / 0.5;
+			exposure += (diff * fps.get_delta_time()) / 0.5f;
 		}
 		else {
-			exposure += std::min<float>(diff, 0.2 * fps.get_delta_time());
+			exposure += std::min(diff, 0.2f * fps.get_delta_time());
 		}
 
 #ifndef NDEBUG
@@ -765,6 +768,8 @@ void APIENTRY openglCallbackFunction(GLenum source, GLenum type, GLuint id, GLen
 		case GL_DEBUG_TYPE_OTHER:
 			std::cerr << "OTHER";
 			break;
+		default:
+			break;
 	}
 	std::cerr << '\n';
 
@@ -779,6 +784,8 @@ void APIENTRY openglCallbackFunction(GLenum source, GLenum type, GLuint id, GLen
 			break;
 		case GL_DEBUG_SEVERITY_HIGH:
 			std::cerr << "HIGH";
+			break;
+		default:
 			break;
 	}
 	std::cerr << '\n';
@@ -804,12 +811,14 @@ void Check_RenderBuffer() {
 			case GL_FRAMEBUFFER_UNSUPPORTED:
 				std::cerr << "Framebuffer unsupported\n";
 				break;
+			default:
+				break;
 		}
 		throw std::runtime_error("Framebuffer incomplete");
 	}
 }
 
-void PrepareBuffers(size_t x, size_t y, RenderInfo& data) {
+void PrepareBuffers(int x, int y, RenderInfo& data) {
 	glGenFramebuffers(1, &data.gBuffer);
 	glBindFramebuffer(GL_FRAMEBUFFER, data.gBuffer);
 

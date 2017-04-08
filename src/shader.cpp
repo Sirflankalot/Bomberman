@@ -32,6 +32,8 @@ void Shader_Program::add(const char* filename, Shader::shadertype_t type) {
 		case Shader::COMPUTE:
 			new_type = GL_COMPUTE_SHADER;
 			break;
+		default:
+			break;
 	}
 
 	this->add(filename, new_type);

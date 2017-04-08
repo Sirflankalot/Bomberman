@@ -52,8 +52,8 @@ void bomb::update_bombs(float time_elapsed) {
 
 		if (bomb.time < 0.0f) {
 			bomb.live = false;
-			for (std::size_t i = 0; i < players::player_list.size(); ++i) {
-				auto&& p = players::player_list[i];
+			for (std::size_t bi = 0; bi < players::player_list.size(); ++bi) {
+				auto&& p = players::player_list[bi];
 				glm::vec2 player_location =
 				    glm::mix(glm::vec2(p.last_x, p.last_y), glm::vec2(p.loc_x, p.loc_y), p.factor);
 				glm::vec2 bomb_location(bomb.x, bomb.y);
@@ -61,7 +61,7 @@ void bomb::update_bombs(float time_elapsed) {
 				float dist = glm::distance(player_location, bomb_location);
 
 				if (dist <= 3) {
-					players::respawn(i);
+					players::respawn(bi);
 				}
 			}
 		}

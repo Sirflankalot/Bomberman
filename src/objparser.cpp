@@ -1,7 +1,7 @@
 #include "objparser.hpp"
 
-#include <sstream>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <tuple>
 
@@ -36,23 +36,22 @@ ObjFile parse_obj_file(std::string name) {
 
 	while (!fs.eof()) {
 		// Start of line
-		char c;
-		c = fs.get();
+		char c = char(fs.get());
 		switch (c) {
 			// Skip comment line by fallthrough
 
 			// Object name
 			case 'o': {
-				std::string name;
-				fs >> name;
+				std::string obj_name;
+				fs >> obj_name;
 
-				file.objects.push_back(Object{std::move(name), {}});
+				file.objects.push_back(Object{std::move(obj_name), {}});
 				break;
 			}
 
 			// Parse a vertex
 			case 'v': {
-				c = fs.get();
+				c = char(fs.get());
 				switch (c) {
 					case ' ': {
 						float x, y, z;
@@ -144,6 +143,8 @@ ObjFile parse_obj_file(std::string name) {
 				}
 				break;
 			}
+			default:
+				break;
 		}
 
 		std::string _;

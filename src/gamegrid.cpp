@@ -80,12 +80,12 @@ void gamegrid::render(GLuint world_matrix_uniform) {
 			continue;
 		}
 
-		std::size_t x = i % gamegrid.width;
-		std::size_t y = i / gamegrid.width;
+		auto x = float(i % gamegrid.width);
+		auto y = float(i / gamegrid.width);
 
 		glm::mat4 world =
-		    glm::translate(glm::mat4{}, glm::vec3(x - (gamegrid.width - 1.0f) / 2.0f, 0.5,
-		                                          y - (gamegrid.height - 1.0f) / 2.0f));
+		    glm::translate(glm::mat4{}, glm::vec3(x - (float(gamegrid.width) - 1.0f) / 2.0f, 0.5,
+		                                          y - (float(gamegrid.height) - 1.0f) / 2.0f));
 
 		switch (gamegrid.state[i].type) {
 			case StateType::empty:
@@ -102,6 +102,8 @@ void gamegrid::render(GLuint world_matrix_uniform) {
 				render::render_object(spikeycube_vao, spikeycube_vbo,
 				                      spikeycube.objects[0].vertices.size(), spikeycube_tex,
 				                      world_matrix_uniform, world);
+				break;
+			default:
 				break;
 		}
 	}

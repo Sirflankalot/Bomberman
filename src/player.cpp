@@ -17,8 +17,8 @@ static std::size_t player_vertex_count;
 static GLuint player_vao, player_vbo;
 static std::array<GLuint, 4> player_texture;
 
-static std::array<float, 4> time_since_bullet{0.0f, 0.0f, 0.0f, 0.0f};
-static std::array<float, 4> time_since_bomb{0.0f, 0.0f, 0.0f, 0.0f};
+static std::array<float, 4> time_since_bullet{{0.0f, 0.0f, 0.0f, 0.0f}};
+static std::array<float, 4> time_since_bomb{{0.0f, 0.0f, 0.0f, 0.0f}};
 
 void players::initialize() {
 	respawn(0);
@@ -67,10 +67,11 @@ void players::update_players(const control::movement_report_type& report, float 
 			    gamegrid::gamegrid.state[player.loc_y * gamegrid::gamegrid.width + player.loc_x];
 
 			switch (current_block.type) {
-				case gamegrid::StateType::powerup_ammo:
-					player.ammo_count += 2;
+				case gamegrid::StateType::powerup_ammo: {
+					player.ammo_count = static_cast<uint8_t>(player.ammo_count + 2);
 					current_block.type = gamegrid::StateType::empty;
 					break;
+				}
 				case gamegrid::StateType::powerup_bomb:
 					if (player.power != player_info::powerup::bomb) {
 						player.power = player_info::powerup::bomb;
@@ -123,7 +124,7 @@ void players::update_players(const control::movement_report_type& report, float 
 
 		if (controller.rtrigger && time_since_bullet[i] >= 0.5f && player.ammo_count >= 1) {
 			time_since_bullet[i] = 0;
-			player.ammo_count -= 1;
+			player.ammo_count = static_cast<uint8_t>(player.ammo_count - 1);
 			auto grid_loc = glm::mix(glm::vec2(player.last_x, player.last_y),
 			                         glm::vec2(player.loc_x, player.loc_y), player.factor);
 			glm::vec2 velocity;
@@ -141,6 +142,8 @@ void players::update_players(const control::movement_report_type& report, float 
 					break;
 				case player_info::direction::down:
 					velocity = glm::vec2(0.0f, bullet_speed);
+					break;
+				default:
 					break;
 			}
 
@@ -204,6 +207,8 @@ void players::respawn(std::size_t player_index) {
 			player.loc_x = 0;
 			player.loc_y = gamegrid::gamegrid.height - 1;
 			player.dir = player_info::direction::up;
+			break;
+		default:
 			break;
 	}
 

@@ -26,13 +26,14 @@ namespace lights {
 	GLuint LightPosition_VBO;
 
 	std::size_t add(glm::vec3 color, glm::vec3 position) {
-		constexpr float constant = 1.0;
-		constexpr float linear = 0.7;
-		constexpr float quadratic = 1.8;
+		constexpr float constant = 1.0f;
+		constexpr float linear = 0.7f;
+		constexpr float quadratic = 1.8f;
 		float lightMax = std::max(std::max(color.r, color.g), color.b);
-		float size = (-linear + std::sqrt(linear * linear -
-		                                  4 * quadratic * (constant - (256.0 / 5.0) * lightMax))) /
-		             (2 * quadratic);
+		float size =
+		    (-linear +
+		     std::sqrt(linear * linear - 4 * quadratic * (constant - (256.0f / 5.0f) * lightMax))) /
+		    (2.0f * quadratic);
 
 		size_t lightptr = lightptrcount++;
 		lightdata.emplace_back(LightData{position, lightptrcount, size});
@@ -69,13 +70,13 @@ namespace lights {
 		glGenBuffers(1, &LightTransform_VBO);
 		glBindBuffer(GL_ARRAY_BUFFER, LightTransform_VBO);
 		glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4),
-		                      (void*) (0 * sizeof(GLfloat)));
+		                      reinterpret_cast<GLvoid*>(0 * sizeof(GLfloat)));
 		glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4),
-		                      (void*) (4 * sizeof(GLfloat)));
+		                      reinterpret_cast<GLvoid*>(4 * sizeof(GLfloat)));
 		glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4),
-		                      (void*) (8 * sizeof(GLfloat)));
+		                      reinterpret_cast<GLvoid*>(8 * sizeof(GLfloat)));
 		glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4),
-		                      (void*) (12 * sizeof(GLfloat)));
+		                      reinterpret_cast<GLvoid*>(12 * sizeof(GLfloat)));
 		glEnableVertexAttribArray(2);
 		glEnableVertexAttribArray(3);
 		glEnableVertexAttribArray(4);

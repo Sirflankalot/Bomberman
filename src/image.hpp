@@ -14,8 +14,8 @@ namespace image {
 
 	struct image {
 		std::vector<pixel> data;
-		std::size_t width;
-		std::size_t height;
+		int width;
+		int height;
 	};
 
 	image read_image(std::istream&);

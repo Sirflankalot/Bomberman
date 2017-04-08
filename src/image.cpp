@@ -13,7 +13,7 @@ static void read_from_iostream(png_structp png_ptr, png_bytep outBytes,
 	void* io_ptr = png_get_io_ptr(png_ptr);
 
 	std::istream& stream = *reinterpret_cast<std::istream*>(io_ptr);
-	stream.read((char*) outBytes, byteCountToRead);
+	stream.read(reinterpret_cast<char*>(outBytes), byteCountToRead);
 }
 
 template <bool has_alpha>
@@ -22,17 +22,17 @@ static void parse_png(image::image& out_image, png_struct* const png_ptr,
 	const auto width = out_image.width;
 	const auto height = out_image.height;
 
-	const png_uint_32 bytes_per_row = png_get_rowbytes(png_ptr, info_ptr);
+	const png_size_t bytes_per_row = png_get_rowbytes(png_ptr, info_ptr);
 	std::unique_ptr<uint8_t[]> row_data(new uint8_t[bytes_per_row]);
 
 	// read rows
-	for (std::size_t row = 0; row < height; ++row) {
+	for (int row = 0; row < height; ++row) {
 		png_read_row(png_ptr, row_data.get(), nullptr);
 
 		const std::size_t row_offset = row * width;
 
 		std::size_t byte_index = 0;
-		for (std::size_t col = 0; col < width; ++col) {
+		for (int col = 0; col < width; ++col) {
 			const uint8_t red = row_data[byte_index + 0];
 			const uint8_t green = row_data[byte_index + 1];
 			const uint8_t blue = row_data[byte_index + 2];
@@ -57,7 +57,7 @@ image::image image::read_image(std::istream& stream) {
 	std::array<char, 8> header;
 	stream.read(&header[0], 8);
 
-	bool is_png = !png_sig_cmp((png_bytep) &header[0], 0, 8);
+	bool is_png = !png_sig_cmp(reinterpret_cast<png_bytep>(&header[0]), 0, 8);
 	if (!is_png) {
 		throw std::invalid_argument("Stream given isn't png");
 	}
@@ -122,7 +122,7 @@ image::image image::read_image(std::istream& stream) {
 
 void image::ogl_flip_image(image& image) {
 	std::unique_ptr<pixel[]> row_cache(new pixel[image.width]);
-	for (std::size_t row = 0; row < image.height / 2; ++row) {
+	for (int row = 0; row < image.height / 2; ++row) {
 		auto offset1_start = image.data.begin() + (row * image.width);
 		auto offset1_end = image.data.begin() + ((row + 1) * image.width);
 		auto offset2_start = image.data.begin() + ((image.height - row - 1) * image.width);
@@ -137,6 +137,6 @@ void image::ogl_flip_image(image& image) {
 image::image image::create_ogl_image(const char* name) {
 	std::ifstream file(name, std::ios::binary);
 	auto img = read_image(file);
-	//ogl_flip_image(img);
+	// ogl_flip_image(img);
 	return img;
 }

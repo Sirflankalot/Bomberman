@@ -50,5 +50,5 @@ SDL_Manager::~SDL_Manager() {
 void SDL_Manager::refresh_size() {
 	SDL_GetWindowSize(mainWindow, &(this->size.width), &(this->size.height));
 	glViewport(0, 0, size.width, size.height);
-	size.ratio = (float) size.width / (float) size.height;
+	size.ratio = static_cast<float>(size.width) / static_cast<float>(size.height);
 }

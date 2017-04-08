@@ -8,9 +8,9 @@ control::controller_manager control::manager;
 
 void control::initialize() {
 	return;
-	std::size_t joysticks = SDL_NumJoysticks();
+	auto joysticks = SDL_NumJoysticks();
 	manager.joy_count = 0;
-	for (std::size_t i = 0; i < joysticks; ++i) {
+	for (int i = 0; i < joysticks; ++i) {
 		if (SDL_IsGameController(i)) {
 			SDL_GameController* gpad = SDL_GameControllerOpen(i);
 			SDL_Joystick* joy = SDL_GameControllerGetJoystick(gpad);
@@ -86,6 +86,8 @@ void control::controller_axis_movement(const SDL_ControllerAxisEvent& event) {
 		case SDL_CONTROLLER_AXIS_TRIGGERRIGHT:
 			found_itr->trigger_right = event.value;
 			break;
+		default:
+			break;
 	}
 
 	// std::cerr << "LX: " << found_itr->left_x << ' '          //
@@ -148,6 +150,8 @@ void control::controller_button_press(const SDL_ControllerButtonEvent& event) {
 			break;
 		case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
 			found_itr->keys[14] = down;
+			break;
+		default:
 			break;
 	}
 

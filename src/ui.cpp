@@ -65,7 +65,7 @@ void ui::render(std::size_t screen_width, std::size_t screen_height) {
 
 	if (players::player_list[0].active) {
 		glUniform2f(image_prog->getUniform("origin"), 10.0f / float(screen_width),
-		            (float(screen_height) - 110.0f) / screen_height);
+		            (float(screen_height) - 110.0f) / float(screen_height));
 
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, choose_tex(players::player_list[0].ammo_count));
@@ -76,7 +76,7 @@ void ui::render(std::size_t screen_width, std::size_t screen_height) {
 	if (players::player_list[1].active) {
 		glUniform2f(image_prog->getUniform("origin"),
 		            (float(screen_width) - 50.f) / float(screen_width),
-		            (float(screen_height) - 110.0f) / screen_height);
+		            (float(screen_height) - 110.0f) / float(screen_height));
 
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, choose_tex(players::player_list[1].ammo_count));
@@ -112,7 +112,7 @@ void ui::render(std::size_t screen_width, std::size_t screen_height) {
 	if (players::player_list[0].active &&
 	    players::player_list[0].power == players::player_info::powerup::bomb) {
 		glUniform2f(image_prog->getUniform("origin"), 60.0f / float(screen_width),
-		            (float(screen_height) - 110.0f) / screen_height);
+		            (float(screen_height) - 110.0f) / float(screen_height));
 
 		render::render_fullscreen_quad();
 	}
@@ -121,7 +121,7 @@ void ui::render(std::size_t screen_width, std::size_t screen_height) {
 	    players::player_list[1].power == players::player_info::powerup::bomb) {
 		glUniform2f(image_prog->getUniform("origin"),
 		            (float(screen_width) - 160.f) / float(screen_width),
-		            (float(screen_height) - 110.0f) / screen_height);
+		            (float(screen_height) - 110.0f) / float(screen_height));
 
 		render::render_fullscreen_quad();
 	}
@@ -147,8 +147,9 @@ void ui::render(std::size_t screen_width, std::size_t screen_height) {
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, reset_tex);
 
-	glUniform2f(image_prog->getUniform("origin"), ((screen_width / 2.0f) - 273.5f) / screen_width,
-	            (screen_height - 43.0f - 20.0f) / screen_height);
+	glUniform2f(image_prog->getUniform("origin"),
+	            ((float(screen_width) / 2.0f) - 273.5f) / float(screen_width),
+	            (float(screen_height) - 43.0f - 20.0f) / float(screen_height));
 
 	render::render_fullscreen_quad();
 

@@ -19,7 +19,7 @@ namespace control {
 		int16_t trigger_left = 0;
 		int16_t trigger_right = 0;
 
-		std::array<bool, 15> keys = {false};
+		std::array<bool, 15> keys = {{false}};
 	};
 
 	struct controller_report {
